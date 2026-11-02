@@ -1,0 +1,103 @@
+"""Pydantic schemas for request validation and response serialization."""
+
+from app.schemas.ai import (
+    AIChatMessageResponse,
+    AIChatRequest,
+    AIChatResponse,
+    AIChatSessionListResponse,
+    AIChatSessionResponse,
+    AIExplanationRequest,
+    AIExplanationResponse,
+    AINoteGenerationRequest,
+    AINoteGenerationResponse,
+)
+from app.schemas.auth import (
+    LoginRequest,
+    LogoutRequest,
+    MessageResponse,
+    RefreshTokenRequest,
+    RegisterRequest,
+    TokenResponse,
+)
+from app.schemas.document import (
+    DocumentCreate,
+    DocumentListResponse,
+    DocumentResponse,
+    DocumentSummaryResponse,
+    DocumentUpdate,
+)
+from app.schemas.flashcard import (
+    CardCreate,
+    CardResponse,
+    CardUpdate,
+    DeckCreate,
+    DeckDetailResponse,
+    DeckResponse,
+    DeckUpdate,
+)
+from app.schemas.note import NoteCreate, NoteResponse, NoteUpdate
+from app.schemas.quiz import (
+    ConvertMissedToCardsRequest,
+    ConvertMissedToCardsResponse,
+    QuestionReviewItem,
+    QuizAttemptResponse,
+    QuizDetailResponse,
+    QuizGenerateRequest,
+    QuizListResponse,
+    QuizQuestionOption,
+    QuizQuestionResponse,
+    QuizResponse,
+    QuizSubmitRequest,
+)
+from app.schemas.session import SessionResponse
+from app.schemas.subject import SubjectCreate, SubjectResponse, SubjectUpdate
+from app.schemas.user import UserResponse
+
+__all__ = [
+    "AIChatMessageResponse",
+    "AIChatRequest",
+    "AIChatResponse",
+    "AIChatSessionListResponse",
+    "AIChatSessionResponse",
+    "AIExplanationRequest",
+    "AIExplanationResponse",
+    "AINoteGenerationRequest",
+    "AINoteGenerationResponse",
+    "CardCreate",
+    "CardResponse",
+    "CardUpdate",
+    "ConvertMissedToCardsRequest",
+    "ConvertMissedToCardsResponse",
+    "DeckCreate",
+    "DeckDetailResponse",
+    "DeckResponse",
+    "DeckUpdate",
+    "DocumentCreate",
+    "DocumentListResponse",
+    "DocumentResponse",
+    "DocumentSummaryResponse",
+    "DocumentUpdate",
+    "LoginRequest",
+    "LogoutRequest",
+    "MessageResponse",
+    "NoteCreate",
+    "NoteResponse",
+    "NoteUpdate",
+    "QuestionReviewItem",
+    "QuizAttemptResponse",
+    "QuizDetailResponse",
+    "QuizGenerateRequest",
+    "QuizListResponse",
+    "QuizQuestionOption",
+    "QuizQuestionResponse",
+    "QuizResponse",
+    "QuizSubmitRequest",
+    "RefreshTokenRequest",
+    "RegisterRequest",
+    "SessionResponse",
+    "SubjectCreate",
+    "SubjectResponse",
+    "SubjectUpdate",
+    "TokenResponse",
+    "UserResponse",
+]

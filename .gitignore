@@ -1,0 +1,136 @@
+# ==============================================================================
+# StudyMate AI - Comprehensive Master .gitignore
+# Guaranteed Protection for Secrets, User Uploads, Binaries, and Cache
+# ==============================================================================
+
+# 1. Environment Variables & Secrets (CRITICAL SECURITY)
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.mobileprovision
+id_rsa*
+id_ed25519*
+
+# 2. Cloud & Service Credentials
+google-services.json
+GoogleService-Info.plist
+*firebase*.json
+*service-account*.json
+credentials.json
+client_secret*.json
+
+# 3. Mobile Binaries & Build Outputs (Blocks large 100MB+ files)
+*.apk
+*.aab
+*.ipa
+*.ap_
+*.dex
+*.class
+apps/mobile/android/app/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/build/
+apps/mobile/ios/build/
+apps/mobile/ios/Pods/
+android/
+ios/
+
+# 4. JavaScript / Node.js & React Native
+node_modules/
+*/node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.metro/
+.metro-health-check*
+*.tsbuildinfo
+
+# 5. Expo Framework
+.expo/
+**/.expo/
+.expo-shared/
+dist/
+web-build/
+
+# 6. Python & Backend
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+**/.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+*.egg-info/
+**/*.egg-info/
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+.installed.cfg
+*.egg
+
+# 7. Testing, Linting & Coverage
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+
+# 8. User Data & Uploaded Documents (STUDENT PRIVACY)
+uploads/
+**/uploads/
+*.sqlite3
+*.db
+*.sqlite
+
+# 9. IDE & OS Generated Files
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
+.claude/
+**/.claude/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+*.log
+logs/
+
+# 10. Unrelated Temporary Workspaces
+MyMobileApp/
+scratch/
+tmp/
+temp/

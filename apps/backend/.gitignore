@@ -1,0 +1,34 @@
+# Environment & Secrets (NEVER COMMIT REAL .env)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Testing & Linting
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local uploads and student data
+uploads/
+**/uploads/
+*.sqlite3
+*.db
+*.sqlite
+*.log

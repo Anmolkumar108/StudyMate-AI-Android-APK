@@ -1,0 +1,47 @@
+# dependencies
+node_modules/
+
+# Expo & Metro
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro/
+.metro-health-check*
+
+# Binaries & Native
+*.apk
+*.aab
+*.ipa
+.kotlin/
+*.orig.*
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS & OS
+.DS_Store
+Thumbs.db
+
+# local env files (never commit real .env)
+.env
+.env.*
+!.env.example
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
