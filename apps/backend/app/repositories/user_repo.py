@@ -39,3 +39,18 @@ class UserRepository:
         result = await self.session.execute(stmt)
         new_version = result.scalar_one()
         return int(new_version)
+
+    async def update_password(self, user_id: UUID, hashed_password: str) -> None:
+        stmt = (
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                hashed_password=hashed_password,
+                token_version=User.token_version + 1,
+            )
+        )
+        await self.session.execute(stmt)
+
+    async def delete(self, user: User) -> None:
+        await self.session.delete(user)
+        await self.session.flush()

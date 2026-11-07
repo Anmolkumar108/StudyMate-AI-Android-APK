@@ -1,12 +1,13 @@
 import uuid
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from app.models.flashcard import FlashcardDeck
 from app.models.quiz import Quiz, QuizAttempt, QuizQuestion
 from app.schemas.quiz import QuizGenerateRequest, QuizSubmitRequest
 from app.services.ai_service import AIService
-from app.services.quiz_service import QuizNotFoundError, QuizService
+from app.services.quiz_service import QuizService
 
 
 @pytest.mark.asyncio

@@ -8,8 +8,6 @@ from app.models.task import TaskPriority, TaskStatus
 from app.schemas.task import (
     SubtaskItem,
     TaskCreate,
-    TaskListResponse,
-    TaskResponse,
     TaskUpdate,
 )
 

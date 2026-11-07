@@ -12,24 +12,33 @@ from app.db.session import get_db_session
 from app.models.user import User, UserStatus
 from app.repositories.ai_chat_repo import AIChatRepository
 from app.repositories.document_repo import DocumentRepository
+from app.repositories.exam_repo import ExamRepository
 from app.repositories.flashcard_repo import (
     FlashcardDeckRepository,
     FlashcardRepository,
 )
 from app.repositories.note_repo import NoteRepository
 from app.repositories.quiz_repo import QuizRepository
+from app.repositories.study_plan_repo import StudyPlanRepository
 from app.repositories.subject_repo import SubjectRepository
+from app.repositories.task_repo import TaskRepository
+from app.repositories.timetable_repo import TimetableRepository
 from app.repositories.user_repo import UserRepository
 from app.services.ai_chat_service import AIChatService
 from app.services.ai_service import AIService
+from app.services.analytics_service import AnalyticsService
 from app.services.auth_service import AuthService
 from app.services.document_service import DocumentService
+from app.services.exam_service import ExamService
 from app.services.flashcard_service import FlashcardService
 from app.services.note_service import NoteService
 from app.services.quiz_service import QuizService
+from app.services.search_service import SearchService
 from app.services.storage_service import get_storage_service
+from app.services.study_plan_service import StudyPlannerService
 from app.services.subject_service import SubjectService
 from app.services.task_service import TaskService
+from app.services.timetable_service import TimetableService, timetable_service
 
 security_scheme = HTTPBearer(auto_error=False)
 
@@ -106,6 +115,52 @@ def get_task_service(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TaskService:
     return TaskService(db)
+
+
+def get_timetable_service() -> TimetableService:
+    return timetable_service
+
+
+def get_exam_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ExamService:
+    return ExamService(db)
+
+
+def get_ai_service() -> AIService:
+    return AIService()
+
+
+def get_study_planner_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> StudyPlannerService:
+    study_plan_repo = StudyPlanRepository(db)
+    task_repo = TaskRepository(db)
+    exam_repo = ExamRepository(db)
+    timetable_repo = TimetableRepository(db)
+    subject_repo = SubjectRepository(db)
+    ai_service = AIService()
+    return StudyPlannerService(
+        session=db,
+        study_plan_repo=study_plan_repo,
+        task_repo=task_repo,
+        exam_repo=exam_repo,
+        timetable_repo=timetable_repo,
+        subject_repo=subject_repo,
+        ai_service=ai_service,
+    )
+
+
+def get_analytics_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AnalyticsService:
+    return AnalyticsService(db)
+
+
+def get_search_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SearchService:
+    return SearchService(db)
 
 
 async def get_current_user(

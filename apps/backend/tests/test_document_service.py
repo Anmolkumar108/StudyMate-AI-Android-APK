@@ -1,14 +1,14 @@
 import tempfile
 import uuid
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from app.models.document import DocStatus, Document
 from app.services.document_service import (
-    DocumentNotFoundError,
+    MAX_FILE_SIZE_BYTES,
     DocumentService,
     DocumentValidationError,
-    MAX_FILE_SIZE_BYTES,
 )
 from app.services.storage_service import LocalStorageService
 

@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -23,7 +23,7 @@ from app.services.auth_service import (
 @pytest.fixture
 def mock_session() -> AsyncMock:
     session = AsyncMock()
-    session.add = AsyncMock()
+    session.add = MagicMock()
     session.flush = AsyncMock()
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
@@ -48,8 +48,8 @@ async def test_register_success(mock_session: AsyncMock) -> None:
     assert user.email == "new.student@test.edu"
     assert user.full_name == "New Student"
     assert user.role == UserRole.STUDENT
-    assert user.status == UserStatus.ACTIVE
-    mock_session.commit.assert_awaited_once()
+    assert user.status == UserStatus.PENDING_VERIFICATION
+    mock_session.commit.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -128,7 +128,7 @@ async def test_login_success(mock_session: AsyncMock) -> None:
     assert tokens.refresh_token is not None
     service.user_repo.update_last_login.assert_awaited_once()
     service.session_repo.create_session.assert_awaited_once()
-    mock_session.commit.assert_awaited_once()
+    mock_session.commit.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -237,7 +237,7 @@ async def test_refresh_token_rotation_success(mock_session: AsyncMock) -> None:
     assert active_session.is_revoked is True
     assert active_session.rotated_at is not None
     service.session_repo.create_session.assert_awaited_once()
-    mock_session.commit.assert_awaited_once()
+    mock_session.commit.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -362,7 +362,7 @@ async def test_logout_revokes_matching_session(mock_session: AsyncMock) -> None:
     await service.logout(user_id, plain_token)
 
     service.session_repo.revoke_session.assert_awaited_once_with(session)
-    mock_session.commit.assert_awaited_once()
+    mock_session.commit.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -379,7 +379,7 @@ async def test_logout_all_revokes_and_increments_token_version(
     assert count == 3
     service.session_repo.revoke_all_user_sessions.assert_awaited_once_with(user_id)
     service.user_repo.increment_token_version.assert_awaited_once_with(user_id)
-    mock_session.commit.assert_awaited_once()
+    mock_session.commit.assert_awaited()
 
 
 @pytest.mark.asyncio

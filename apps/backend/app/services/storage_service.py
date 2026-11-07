@@ -44,7 +44,7 @@ class LocalStorageService:
         # Or relative path inside base_path
         clean_key = storage_key.replace("local://", "").replace("documents/", "")
         target_path = (self.base_path / clean_key).resolve()
-        
+
         # Guard against directory traversal attacks
         base_resolved = self.base_path.resolve()
         if not str(target_path).startswith(str(base_resolved)):

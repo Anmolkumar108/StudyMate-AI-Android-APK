@@ -34,7 +34,11 @@ from app.services.quiz_service import (
     QuizNotFoundError,
     QuizService,
 )
-from app.services.storage_service import LocalStorageService, StorageService, get_storage_service
+from app.services.storage_service import (
+    LocalStorageService,
+    StorageService,
+    get_storage_service,
+)
 from app.services.subject_service import (
     DuplicateSubjectNameError,
     SubjectError,

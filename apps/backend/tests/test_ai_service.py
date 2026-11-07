@@ -1,9 +1,10 @@
 import uuid
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
 from app.models.ai_chat import AIChatSession
-from app.schemas.ai import AIChatRequest, AIExplanationRequest, AINoteGenerationRequest
+from app.schemas.ai import AIChatRequest
 from app.services.ai_chat_service import AIChatService
 from app.services.ai_service import AIService
 

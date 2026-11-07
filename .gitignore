@@ -126,6 +126,10 @@ Desktop.ini
 *.swp
 *.swo
 *~
+*.bak
+*.tmp
+*.orig
+*.orig.*
 *.log
 logs/
 

@@ -107,7 +107,7 @@ class AIChatService:
         formatted_history = [{"role": m.role, "content": m.content} for m in history]
 
         # 5. Yield session metadata as initial event
-        yield f"event: session\ndata: {str(session.id)}\n\n"
+        yield f"event: session\ndata: {session.id!s}\n\n"
 
         # 6. Stream tokens from AI provider and accumulate response
         full_response_parts: list[str] = []

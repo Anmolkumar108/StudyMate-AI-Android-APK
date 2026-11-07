@@ -280,7 +280,7 @@ class AIService:
             for t in tasks[:10]
         ]
         prompt = (
-            f"Generate an encouraging daily academic briefing for a student. Pending tasks:\n"
+            "Generate an encouraging daily academic briefing for a student. Pending tasks:\n"
             + "\n".join(task_summaries) + "\n\n"
             "Return valid JSON strictly adhering to:\n"
             '{"date": string (today), "greeting": string, "summary": string (motivational 2 sentences), '
@@ -427,12 +427,9 @@ class AIService:
 
     def _clean_json_response(self, text: str) -> dict[str, Any]:
         clean = text.strip()
-        if clean.startswith("```json"):
-            clean = clean[7:]
-        if clean.startswith("```"):
-            clean = clean[3:]
-        if clean.endswith("```"):
-            clean = clean[:-3]
+        clean = clean.removeprefix("```json")
+        clean = clean.removeprefix("```")
+        clean = clean.removesuffix("```")
         return json.loads(clean.strip())  # type: ignore[no-any-return]
 
     # --- Offline & Testing Mock Fallbacks ---

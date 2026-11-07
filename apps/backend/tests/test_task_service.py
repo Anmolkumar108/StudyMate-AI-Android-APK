@@ -1,17 +1,14 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
 
-from app.models.subject import Subject
 from app.models.task import Task, TaskPriority, TaskStatus, TaskTemplate
 from app.schemas.task import (
     CreateTaskFromTemplateRequest,
-    SubtaskItem,
     TaskCreate,
-    TaskTemplateCreate,
     TaskUpdate,
 )
 from app.services.task_service import (
@@ -21,7 +18,6 @@ from app.services.task_service import (
     InvalidTaskSubjectError,
     TaskNotFoundError,
     TaskService,
-    TemplateNotFoundError,
 )
 
 
@@ -119,12 +115,14 @@ async def test_update_task_completed_at_transition(
     # 1. Mark completed -> completed_at should be populated
     payload = TaskUpdate(status=TaskStatus.COMPLETED)
     updated = await service.update_task(task.id, user_id, payload)
+    assert updated.status == TaskStatus.COMPLETED
     assert task.status == TaskStatus.COMPLETED
     assert task.completed_at is not None
 
     # 2. Mark back to in_progress -> completed_at should be cleared
     payload2 = TaskUpdate(status=TaskStatus.IN_PROGRESS)
     updated2 = await service.update_task(task.id, user_id, payload2)
+    assert updated2.status == TaskStatus.IN_PROGRESS
     assert task.status == TaskStatus.IN_PROGRESS
     assert task.completed_at is None
 
@@ -264,6 +262,7 @@ async def test_log_focus_session(mock_session: AsyncMock, user_id: uuid.UUID) ->
     service.task_repo.update = AsyncMock(return_value=task)
 
     updated = await service.log_focus(task_id, user_id, minutes=50, session_count=2)
+    assert updated.focus_minutes == 75
     assert task.focus_minutes == 75
     assert task.focus_sessions_count == 3
 
@@ -289,6 +288,7 @@ async def test_add_and_delete_attachment(mock_session: AsyncMock, user_id: uuid.
         content_type="application/pdf",
         file_bytes=b"%PDF-1.4 dummy content",
     )
+    assert len(updated.attachments) == 1
     assert len(task.attachments) == 1
     att_id = task.attachments[0]["id"]
     assert task.attachments[0]["file_name"] == "lecture.pdf"

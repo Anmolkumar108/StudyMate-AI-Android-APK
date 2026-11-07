@@ -21,9 +21,11 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.ai_chat import AIChatSession
     from app.models.document import Document
+    from app.models.exam import Exam
     from app.models.flashcard import FlashcardDeck
     from app.models.note import Note
     from app.models.quiz import Quiz
+    from app.models.study_session import StudySession
     from app.models.task import Task
     from app.models.user import User
 
@@ -122,6 +124,20 @@ class Subject(Base):
     # Relationship to tasks
     tasks: Mapped[list["Task"]] = relationship(
         "Task",
+        back_populates="subject",
+        passive_deletes=True,
+    )
+
+    # Relationship to exams
+    exams: Mapped[list["Exam"]] = relationship(
+        "Exam",
+        back_populates="subject",
+        passive_deletes=True,
+    )
+
+    # Relationship to study sessions
+    study_sessions: Mapped[list["StudySession"]] = relationship(
+        "StudySession",
         back_populates="subject",
         passive_deletes=True,
     )

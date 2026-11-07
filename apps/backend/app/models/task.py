@@ -4,13 +4,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Enum,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     text,
@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.study_session import StudySession
     from app.models.subject import Subject
     from app.models.user import User
 
@@ -161,6 +162,11 @@ class Task(Base):
         "Task",
         remote_side=[id],
         lazy="selectin",
+    )
+    study_sessions: Mapped[list["StudySession"]] = relationship(
+        "StudySession",
+        back_populates="task",
+        passive_deletes=True,
     )
 
     __table_args__ = (

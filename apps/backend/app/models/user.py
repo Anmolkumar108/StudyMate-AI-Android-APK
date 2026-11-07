@@ -23,12 +23,16 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.ai_chat import AIChatSession
     from app.models.document import Document
+    from app.models.exam import Exam
     from app.models.flashcard import FlashcardDeck
     from app.models.note import Note
     from app.models.quiz import Quiz, QuizAttempt
     from app.models.session import UserSession
+    from app.models.study_plan import StudyPlan
+    from app.models.study_session import StudySession
     from app.models.subject import Subject
     from app.models.task import Task
+    from app.models.verification_token import VerificationToken
 
 
 class UserRole(str, enum.Enum):
@@ -226,6 +230,38 @@ class User(Base):
     # Relationship to tasks
     tasks: Mapped[list["Task"]] = relationship(
         "Task",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    # Relationship to verification tokens
+    verification_tokens: Mapped[list["VerificationToken"]] = relationship(
+        "VerificationToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    # Relationship to exams
+    exams: Mapped[list["Exam"]] = relationship(
+        "Exam",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    # Relationship to study plans (FR-10)
+    study_plans: Mapped[list["StudyPlan"]] = relationship(
+        "StudyPlan",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    # Relationship to study sessions (FR-12 & FR-16)
+    study_sessions: Mapped[list["StudySession"]] = relationship(
+        "StudySession",
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,

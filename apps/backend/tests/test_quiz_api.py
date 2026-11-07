@@ -11,7 +11,6 @@ from app.main import app
 from app.models.quiz import Quiz, QuizQuestion
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.quiz import QuizAttemptResponse
-from app.services.quiz_service import QuizNotFoundError
 
 
 @pytest.fixture

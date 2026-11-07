@@ -49,6 +49,10 @@ markers = [
 line-length = 88
 target-version = "py312"
 
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["B008", "E501"]
+
 [tool.mypy]
 strict = true
 python_version = "3.12"

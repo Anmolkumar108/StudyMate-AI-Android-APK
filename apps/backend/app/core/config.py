@@ -35,6 +35,27 @@ class Settings(BaseSettings):
     DATABASE_URL: str | None = None
     DB_ECHO: bool = False
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+
+    # Email & SMTP Settings
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_TLS: bool = True
+    EMAILS_FROM_EMAIL: str = "noreply@studymate.ai"
+    EMAILS_FROM_NAME: str = "StudyMate AI"
+
+    # Deep Linking & Token Expiry
+    FRONTEND_URL: str = "http://localhost:8081"
+    APP_DEEP_LINK_SCHEME: str = "studymate"
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 1
+    PASSWORD_RESET_OTP_EXPIRE_MINUTES: int = 10
+    RESEND_COOLDOWN_SECONDS: int = 60
+
     @model_validator(mode="after")
     def validate_security_settings(self) -> "Settings":
         # Honor JWT_SECRET_KEY alias if provided

@@ -21,7 +21,6 @@ from app.schemas.document import (
     DocumentBase64UploadRequest,
     DocumentListResponse,
     DocumentResponse,
-    DocumentSummaryResponse,
     DocumentTextCreateRequest,
 )
 from app.services.document_service import (

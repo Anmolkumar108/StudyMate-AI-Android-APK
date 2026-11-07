@@ -11,7 +11,6 @@ from app.main import app
 from app.models.task import Task, TaskPriority, TaskStatus
 from app.models.user import User, UserRole, UserStatus
 from app.services.task_service import (
-    InvalidTaskSubjectError,
     TaskNotFoundError,
 )
 

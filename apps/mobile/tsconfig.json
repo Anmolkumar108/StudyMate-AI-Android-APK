@@ -10,7 +10,9 @@
         "./assets/*"
       ]
     },
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src/**/*.ts",
