@@ -17,7 +17,7 @@ import {
 
 import { ThemedText } from '@/components/themed-text';
 import { Badge, Button, Card, ScreenWrapper } from '@/components/ui';
-import { BorderRadius, MinTouchTarget, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { subjectApi, taskApi } from '@/services/api/client';
 import {
@@ -758,69 +758,69 @@ export default function TasksScreen() {
   };
 
   return (
-    <ScreenWrapper includeTopInset includeBottomInset scrollable={false}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.borderSubtle }]}>
-        <TouchableOpacity onPress={handleBack} accessibilityLabel="Go back" style={styles.backButton}>
-          <Text style={[styles.backIcon, { color: theme.text }]}>←</Text>
+    <ScreenWrapper
+      includeTopInset
+      includeBottomInset
+      includeTabInset
+      scrollable={false}
+      contentContainerStyle={{ flex: 1, paddingHorizontal: 0 }}
+      style={{ backgroundColor: '#060913' }}>
+      {/* 1. Master Header: Ultra-clean, single-row height (48dp), zero wasted space */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity
+          onPress={handleBack}
+          accessibilityLabel="Go back"
+          style={styles.backButton}>
+          <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <ThemedText type="headlineMedium">Tasks & Deadlines</ThemedText>
-          <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
-            Calendar, Reminders & AI Tutor
-          </ThemedText>
+
+        <View style={styles.headerTitleWrap}>
+          <View style={styles.headerBadgeRow}>
+            <Text style={styles.headerSubBadge}>COMMAND CENTER</Text>
+            {tasks.length > 0 ? (
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{tasks.length} tasks</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.headerTitleText} numberOfLines={1}>
+            Tasks & Deadlines
+          </Text>
         </View>
 
-        <TouchableOpacity
-          onPress={loadDailyBriefing}
-          accessibilityLabel="Daily AI Briefing"
-          style={styles.iconBtn}>
-          <Text style={{ fontSize: 18 }}>✨</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={loadDailyBriefing}
+            accessibilityLabel="AI Daily Briefing"
+            style={styles.headerAiBtn}>
+            <Text style={styles.headerAiBtnIcon}>✨</Text>
+            <Text style={styles.headerAiBtnText}>AI</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => {
-            loadTemplates();
-            setIsTemplatesModalOpen(true);
-          }}
-          accessibilityLabel="Task Templates"
-          style={styles.iconBtn}>
-          <Text style={{ fontSize: 18 }}>📑</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={handleTestNotification}
-          accessibilityLabel="Test Alarm & Notification"
-          style={styles.iconBtn}>
-          <Text style={{ fontSize: 18 }}>🔔</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={fetchTasks} accessibilityLabel="Refresh" style={styles.iconBtn}>
-          <Text style={{ fontSize: 18 }}>🔄</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={openCreateModal}
-          accessibilityLabel="Add Task"
-          style={[styles.addBtn, { backgroundColor: theme.brandPrimary }]}>
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>+ Task</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={openCreateModal}
+            accessibilityLabel="Add Task"
+            style={styles.headerAddBtn}>
+            <Text style={styles.headerAddBtnIcon}>＋</Text>
+            <Text style={styles.headerAddBtnText}>Task</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Offline Alert Banner */}
       {isOffline ? (
-        <View style={[styles.offlineBanner, { backgroundColor: theme.badgeWarningBackground }]}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: theme.statusWarning }}>
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>
             📶 Offline Mode: Showing cached tasks. Tap 🔄 to reconnect & sync.
           </Text>
         </View>
       ) : null}
 
-      {/* View Switcher: [ List | Calendar | Analytics ] */}
-      <View style={[styles.viewSwitcherBar, { backgroundColor: theme.surfaceSubtle }]}>
+      {/* 2. View Mode Switcher: [ 📋 Tasks ] [ 📅 Calendar ] [ 📊 Analytics ] */}
+      <View style={styles.viewSwitcherBar}>
         {(
           [
-            { key: 'list', label: '📋 Tasks List' },
+            { key: 'list', label: '📋 Tasks' },
             { key: 'calendar', label: '📅 Calendar' },
             { key: 'analytics', label: '📊 Analytics' },
           ] as const
@@ -832,14 +832,13 @@ export default function TasksScreen() {
               onPress={() => setViewMode(vm.key)}
               style={[
                 styles.viewSwitcherBtn,
-                isAct && { backgroundColor: theme.cardBackground, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+                isAct && styles.viewSwitcherBtnActive,
               ]}>
               <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: isAct ? '700' : '500',
-                  color: isAct ? theme.brandPrimary : theme.textSecondary,
-                }}>
+                style={[
+                  styles.viewSwitcherText,
+                  isAct && styles.viewSwitcherTextActive,
+                ]}>
                 {vm.label}
               </Text>
             </TouchableOpacity>
@@ -849,109 +848,197 @@ export default function TasksScreen() {
 
       {/* VIEW: TASKS LIST */}
       {viewMode === 'list' && (
-        <>
-          {/* Summary Stat Bar */}
-          <View style={[styles.statsBar, { backgroundColor: theme.surfaceSubtle }]}>
-            <View style={styles.statItem}>
-              <ThemedText type="smallBold" style={{ color: theme.textSecondary }}>Pending</ThemedText>
-              <ThemedText type="titleMedium" style={{ color: theme.brandPrimary }}>{stats.pending}</ThemedText>
+        <View style={styles.listRootContainer}>
+          {/* 3. Summary Metrics Bar: Clean single-row, NO line wrapping! */}
+          <View style={styles.metricsBar}>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValPending} numberOfLines={1}>
+                {stats.pending}
+              </Text>
+              <Text style={styles.metricLabel} numberOfLines={1}>
+                Pending
+              </Text>
             </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.borderSubtle }]} />
-            <View style={styles.statItem}>
-              <ThemedText type="smallBold" style={{ color: theme.textSecondary }}>Completed</ThemedText>
-              <ThemedText type="titleMedium" style={{ color: theme.statusSuccess }}>{stats.completed}</ThemedText>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValDone} numberOfLines={1}>
+                {stats.completed}
+              </Text>
+              <Text style={styles.metricLabel} numberOfLines={1}>
+                Done
+              </Text>
             </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.borderSubtle }]} />
-            <View style={styles.statItem}>
-              <ThemedText type="smallBold" style={{ color: theme.textSecondary }}>Overdue</ThemedText>
-              <ThemedText type="titleMedium" style={{ color: theme.statusDanger }}>{stats.overdue}</ThemedText>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValOverdue} numberOfLines={1}>
+                {stats.overdue}
+              </Text>
+              <Text style={styles.metricLabel} numberOfLines={1}>
+                Overdue
+              </Text>
             </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.borderSubtle }]} />
-            <View style={styles.statItem}>
-              <ThemedText type="smallBold" style={{ color: theme.textSecondary }}>Focus Time</ThemedText>
-              <ThemedText type="titleMedium" style={{ color: theme.brandSecondary }}>{stats.focusMins}m</ThemedText>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValFocus} numberOfLines={1}>
+                {stats.focusMins}m
+              </Text>
+              <Text style={styles.metricLabel} numberOfLines={1}>
+                Focus
+              </Text>
             </View>
           </View>
 
-          {/* Filter Tabs */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
-            {(
-              [
-                { key: 'all', label: 'All' },
-                { key: 'todo', label: 'To Do' },
-                { key: 'in_progress', label: 'In Progress' },
-                { key: 'completed', label: 'Done ✓' },
-                { key: 'overdue', label: 'Overdue ⚠️' },
-              ] as const
-            ).map((tab) => {
-              const isActive = filterTab === tab.key;
-              return (
+          {/* 4. Search Bar & Quick Action Tool Buttons */}
+          <View style={styles.searchAndToolsRow}>
+            <View style={styles.searchContainer}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search tasks, notes, subtasks..."
+                placeholderTextColor="#64748B"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery ? (
                 <TouchableOpacity
-                  key={tab.key}
-                  onPress={() => setFilterTab(tab.key)}
-                  style={[
-                    styles.tabChip,
-                    { backgroundColor: isActive ? theme.brandPrimary : theme.surfaceSubtle },
-                  ]}>
-                  <Text
-                    style={{
-                      color: isActive ? '#ffffff' : theme.text,
-                      fontSize: 12,
-                      fontWeight: isActive ? '700' : '500',
-                    }}>
-                    {tab.label}
-                  </Text>
+                  onPress={() => setSearchQuery('')}
+                  style={styles.clearSearchBtn}>
+                  <Text style={styles.clearSearchIcon}>✕</Text>
                 </TouchableOpacity>
-              );
-            })}
-            {subjects.map((sub) => {
-              const isSubActive = selectedSubjectId === sub.id;
-              return (
-                <TouchableOpacity
-                  key={sub.id}
-                  onPress={() => setSelectedSubjectId(isSubActive ? null : sub.id)}
-                  style={[
-                    styles.tabChip,
-                    {
-                      backgroundColor: isSubActive ? sub.color : theme.surfaceSubtle,
-                      borderColor: sub.color,
-                      borderWidth: isSubActive ? 0 : 1,
-                    },
-                  ]}>
-                  <Text
-                    style={{
-                      color: isSubActive ? '#ffffff' : theme.text,
-                      fontSize: 12,
-                      fontWeight: isSubActive ? '700' : '500',
-                    }}>
-                    {sub.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+              ) : null}
+            </View>
 
-          {/* Search Bar */}
-          <View style={styles.searchRow}>
-            <TextInput
-              style={[
-                styles.searchInput,
-                { backgroundColor: theme.surfaceSubtle, color: theme.text, borderColor: theme.borderSubtle },
-              ]}
-              placeholder="🔍 Search assignments, subtasks, notes..."
-              placeholderTextColor={theme.textTertiary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
+            <TouchableOpacity
+              onPress={() => {
+                loadTemplates();
+                setIsTemplatesModalOpen(true);
+              }}
+              accessibilityLabel="Task Templates"
+              style={styles.quickActionIconBtn}>
+              <Text style={styles.quickActionIcon}>📑</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={fetchTasks}
+              accessibilityLabel="Refresh and sync"
+              style={styles.quickActionIconBtn}>
+              <Text style={styles.quickActionIcon}>🔄</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleTestNotification}
+              accessibilityLabel="Test Alarm"
+              style={styles.quickActionIconBtn}>
+              <Text style={styles.quickActionIcon}>🔔</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Task List */}
+          {/* 5. Status Filter Row (Enclosed in strict container: ZERO OVERLAP!) */}
+          <View style={styles.statusRowContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.statusRowContent}>
+              {(
+                [
+                  { key: 'all', label: 'All', count: stats.total },
+                  { key: 'todo', label: 'To Do', count: stats.pending },
+                  { key: 'in_progress', label: 'In Progress', count: null },
+                  { key: 'completed', label: 'Done', count: stats.completed },
+                  { key: 'overdue', label: 'Overdue', count: stats.overdue },
+                ] as const
+              ).map((tab) => {
+                const isActive = filterTab === tab.key;
+                const isOverdueTab = tab.key === 'overdue' && stats.overdue > 0;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    onPress={() => setFilterTab(tab.key)}
+                    style={[
+                      styles.statusPill,
+                      isActive && styles.statusPillActive,
+                      isOverdueTab && styles.statusPillOverdue,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.statusPillText,
+                        isActive && styles.statusPillTextActive,
+                        isOverdueTab && { color: '#FB7185' },
+                      ]}>
+                      {tab.label}
+                      {tab.count != null ? ` (${tab.count})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* 6. Subject Filter Row (Enclosed in strict container: ZERO OVERLAP!) */}
+          {subjects.length > 0 ? (
+            <View style={styles.subjectRowContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.subjectRowContent}>
+                <TouchableOpacity
+                  onPress={() => setSelectedSubjectId(null)}
+                  style={[
+                    styles.subjectFilterChip,
+                    selectedSubjectId === null && styles.subjectFilterChipActive,
+                  ]}>
+                  <Text style={styles.subjectFilterDot}>📚</Text>
+                  <Text
+                    style={[
+                      styles.subjectFilterText,
+                      selectedSubjectId === null && styles.subjectFilterTextActive,
+                    ]}>
+                    All Subjects
+                  </Text>
+                </TouchableOpacity>
+
+                {subjects.map((sub) => {
+                  const isSubActive = selectedSubjectId === sub.id;
+                  return (
+                    <TouchableOpacity
+                      key={sub.id}
+                      onPress={() => setSelectedSubjectId(isSubActive ? null : sub.id)}
+                      style={[
+                        styles.subjectFilterChip,
+                        isSubActive && {
+                          backgroundColor: `${sub.color}26`,
+                          borderColor: sub.color,
+                        },
+                      ]}>
+                      <View
+                        style={[
+                          styles.subjectFilterColorCircle,
+                          { backgroundColor: sub.color },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.subjectFilterText,
+                          isSubActive && { color: '#FFFFFF', fontWeight: '800' },
+                        ]}>
+                        {sub.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* 7. FlatList of Tasks */}
           <FlatList
             data={filteredTasks}
             keyExtractor={(item) => item.id}
+            style={styles.taskList}
             contentContainerStyle={styles.listContent}
             refreshing={isLoading}
             onRefresh={fetchTasks}
+            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               !isLoading ? (
                 <View style={styles.emptyContainer}>
@@ -984,8 +1071,8 @@ export default function TasksScreen() {
                   variant="default"
                   style={[
                     styles.taskCard,
-                    isDone && { opacity: 0.75 },
-                    overdue && { borderColor: theme.statusDanger, borderWidth: 1 },
+                    isDone && styles.taskCardCompleted,
+                    overdue && styles.taskCardOverdue,
                   ]}>
                   {/* Top Row: Checkbox + Title + Badges */}
                   <View style={styles.taskHeaderRow}>
@@ -994,23 +1081,19 @@ export default function TasksScreen() {
                       accessibilityLabel="Toggle task completion"
                       style={[
                         styles.checkbox,
-                        {
-                          borderColor: isDone ? theme.statusSuccess : theme.borderSubtle,
-                          backgroundColor: isDone ? theme.statusSuccess : 'transparent',
-                        },
+                        isDone && styles.checkboxDone,
                       ]}>
                       {isDone ? <Text style={styles.checkMark}>✓</Text> : null}
                     </TouchableOpacity>
 
                     <View style={{ flex: 1, marginHorizontal: Spacing.xs }}>
-                      <ThemedText
-                        type="titleMedium"
+                      <Text
                         style={[
                           styles.taskTitle,
-                          isDone && { textDecorationLine: 'line-through', color: theme.textTertiary },
+                          isDone && styles.taskTitleDone,
                         ]}>
                         {item.title}
-                      </ThemedText>
+                      </Text>
                     </View>
 
                     <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
@@ -1023,10 +1106,10 @@ export default function TasksScreen() {
 
                   {/* Prerequisite Indicator */}
                   {item.depends_on ? (
-                    <View style={[styles.prereqBanner, { backgroundColor: theme.surfaceSubtle }]}>
-                      <Text style={{ fontSize: 11, color: theme.textSecondary }}>
+                    <View style={[styles.prereqBanner, { backgroundColor: 'rgba(255, 255, 255, 0.04)' }]}>
+                      <Text style={{ fontSize: 11, color: '#94A3B8' }}>
                         🔗 Prerequisite:{' '}
-                        <Text style={{ fontWeight: '700', color: item.depends_on.status === 'completed' ? theme.statusSuccess : theme.statusWarning }}>
+                        <Text style={{ fontWeight: '700', color: item.depends_on.status === 'completed' ? '#34D399' : '#FBBF24' }}>
                           {item.depends_on.title} {item.depends_on.status === 'completed' ? '(Done ✓)' : '(Pending 🔒)'}
                         </Text>
                       </Text>
@@ -1035,9 +1118,9 @@ export default function TasksScreen() {
 
                   {/* Description */}
                   {item.description ? (
-                    <ThemedText type="bodySmall" numberOfLines={2} style={{ color: theme.textSecondary, marginTop: Spacing.xs }}>
+                    <Text numberOfLines={2} style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>
                       {item.description}
-                    </ThemedText>
+                    </Text>
                   ) : null}
 
                   {/* Meta row: Subject, Due Date, Focus Time */}
@@ -1056,15 +1139,15 @@ export default function TasksScreen() {
                         style={[
                           styles.dueBadge,
                           {
-                            backgroundColor: overdue ? theme.badgeDangerBackground : theme.surfaceSubtle,
-                            borderColor: overdue ? theme.statusDanger : theme.borderSubtle,
+                            backgroundColor: overdue ? 'rgba(244, 63, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                            borderColor: overdue ? 'rgba(244, 63, 94, 0.4)' : 'rgba(255, 255, 255, 0.08)',
                           },
                         ]}>
                         <Text
                           style={{
                             fontSize: 11,
                             fontWeight: overdue ? '700' : '600',
-                            color: overdue ? theme.statusDanger : theme.textSecondary,
+                            color: overdue ? '#FB7185' : '#94A3B8',
                           }}>
                           {overdue ? '🚨 Overdue: ' : '⏰ '}
                           {formatDueDate(item.due_datetime)}
@@ -1074,7 +1157,7 @@ export default function TasksScreen() {
                     ) : null}
 
                     {(item.focus_minutes || 0) > 0 ? (
-                      <Text style={{ fontSize: 11, color: theme.brandPrimary, fontWeight: '600' }}>
+                      <Text style={{ fontSize: 11, color: '#38BDF8', fontWeight: '600' }}>
                         ⏱️ {item.focus_minutes}m focused ({item.focus_sessions_count}s)
                       </Text>
                     ) : null}
@@ -1082,22 +1165,22 @@ export default function TasksScreen() {
 
                   {/* Subtasks Progress Bar & Checklist */}
                   {totalSubtasks > 0 ? (
-                    <View style={[styles.subtasksContainer, { borderTopColor: theme.borderSubtle }]}>
+                    <View style={[styles.subtasksContainer, { borderTopColor: 'rgba(255, 255, 255, 0.06)' }]}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <ThemedText type="smallBold" style={{ color: theme.textSecondary }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8' }}>
                           Checklist ({completedSubtasks}/{totalSubtasks})
-                        </ThemedText>
-                        <Text style={{ fontSize: 11, color: theme.textSecondary }}>{Math.round(progressPct)}%</Text>
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#94A3B8' }}>{Math.round(progressPct)}%</Text>
                       </View>
 
                       {/* Progress Line */}
-                      <View style={[styles.progressBarTrack, { backgroundColor: theme.borderSubtle }]}>
+                      <View style={[styles.progressBarTrack, { backgroundColor: 'rgba(255, 255, 255, 0.08)' }]}>
                         <View
                           style={[
                             styles.progressBarFill,
                             {
                               width: `${progressPct}%`,
-                              backgroundColor: progressPct === 100 ? theme.statusSuccess : theme.brandPrimary,
+                              backgroundColor: progressPct === 100 ? '#10B981' : '#38BDF8',
                             },
                           ]}
                         />
@@ -1108,13 +1191,13 @@ export default function TasksScreen() {
                           key={st.id}
                           onPress={() => handleToggleSubtaskInline(item, st.id)}
                           style={styles.subtaskRow}>
-                          <Text style={{ fontSize: 14, color: st.is_completed ? theme.statusSuccess : theme.textTertiary }}>
+                          <Text style={{ fontSize: 14, color: st.is_completed ? '#10B981' : '#64748B' }}>
                             {st.is_completed ? '☑' : '☐'}
                           </Text>
                           <Text
                             style={[
                               styles.subtaskText,
-                              { color: st.is_completed ? theme.textTertiary : theme.text },
+                              { color: st.is_completed ? '#64748B' : '#E2E8F0' },
                               st.is_completed && { textDecorationLine: 'line-through' },
                             ]}>
                             {st.title}
@@ -1126,18 +1209,18 @@ export default function TasksScreen() {
 
                   {/* Attachments Section */}
                   {item.attachments && item.attachments.length > 0 ? (
-                    <View style={[styles.attachmentsContainer, { borderTopColor: theme.borderSubtle }]}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>
+                    <View style={[styles.attachmentsContainer, { borderTopColor: 'rgba(255, 255, 255, 0.06)' }]}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', marginBottom: 4 }}>
                         📎 Attachments ({item.attachments.length})
                       </Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         {item.attachments.map((att) => (
-                          <View key={att.id} style={[styles.attachmentChip, { backgroundColor: theme.surfaceSubtle }]}>
-                            <Text style={{ fontSize: 11, color: theme.text }}>
+                          <View key={att.id} style={[styles.attachmentChip, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+                            <Text style={{ fontSize: 11, color: '#E2E8F0' }}>
                               📄 {att.file_name} ({Math.round(att.file_size / 1024)} KB)
                             </Text>
                             <TouchableOpacity onPress={() => handleDeleteAttachment(item, att.id)}>
-                              <Text style={{ color: theme.statusDanger, marginLeft: 6, fontWeight: '700' }}>✕</Text>
+                              <Text style={{ color: '#FB7185', marginLeft: 6, fontWeight: '700' }}>✕</Text>
                             </TouchableOpacity>
                           </View>
                         ))}
@@ -1146,37 +1229,37 @@ export default function TasksScreen() {
                   ) : null}
 
                   {/* Card Actions Footer */}
-                  <View style={[styles.cardFooter, { borderTopColor: theme.borderSubtle }]}>
+                  <View style={styles.cardFooter}>
                     <TouchableOpacity
                       onPress={() => router.push(`/pomodoro?taskId=${item.id}&taskTitle=${encodeURIComponent(item.title)}` as never)}
                       style={styles.actionBtn}>
-                      <Text style={{ fontSize: 12, color: theme.brandPrimary, fontWeight: '700' }}>
+                      <Text style={{ fontSize: 12, color: '#34D399', fontWeight: '700' }}>
                         ⏱️ Focus
                       </Text>
                     </TouchableOpacity>
 
                     {item.due_datetime && !isDone ? (
                       <TouchableOpacity onPress={() => handleSnooze(item)} style={styles.actionBtn}>
-                        <Text style={{ fontSize: 12, color: theme.brandSecondary, fontWeight: '600' }}>
+                        <Text style={{ fontSize: 12, color: '#818CF8', fontWeight: '600' }}>
                           ⏰ Snooze 10m
                         </Text>
                       </TouchableOpacity>
                     ) : null}
 
                     <TouchableOpacity onPress={() => handlePickAttachment(item)} style={styles.actionBtn}>
-                      <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>
+                      <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '600' }}>
                         📎 Attach
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => openEditModal(item)} style={styles.actionBtn}>
-                      <Text style={{ fontSize: 12, color: theme.brandPrimary, fontWeight: '600' }}>
+                      <Text style={{ fontSize: 12, color: '#38BDF8', fontWeight: '600' }}>
                         ✏️ Edit
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => handleDeleteTask(item)} style={styles.actionBtn}>
-                      <Text style={{ fontSize: 12, color: theme.statusDanger, fontWeight: '600' }}>
+                      <Text style={{ fontSize: 12, color: '#FB7185', fontWeight: '600' }}>
                         🗑️ Delete
                       </Text>
                     </TouchableOpacity>
@@ -1185,7 +1268,7 @@ export default function TasksScreen() {
               );
             }}
           />
-        </>
+        </View>
       )}
 
       {/* VIEW: CALENDAR */}
@@ -1918,110 +2001,394 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
+  headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingTop: 4,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    gap: Spacing.xs,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: '#070A14',
+    gap: 8,
   },
   backButton: {
-    padding: Spacing.xs,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backIcon: {
-    fontSize: 22,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerTitleWrap: {
+    flex: 1,
+    gap: 1,
+  },
+  headerBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerSubBadge: {
+    color: '#10B981',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  countBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  countBadgeText: {
+    color: '#34D399',
+    fontSize: 9.5,
     fontWeight: '700',
   },
-  headerTitleContainer: {
-    flex: 1,
+  headerTitleText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
-  iconBtn: {
-    padding: Spacing.xs,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  addBtn: {
-    paddingVertical: 6,
+  headerAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(99, 102, 241, 0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.35)',
+  },
+  headerAiBtnIcon: {
+    fontSize: 13,
+  },
+  headerAiBtnText: {
+    color: '#818CF8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  headerAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#059669',
     paddingHorizontal: 12,
-    borderRadius: BorderRadius.sm,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1.2,
+    borderColor: 'rgba(52, 211, 153, 0.4)',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  headerAddBtnIcon: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  headerAddBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   offlineBanner: {
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: Spacing.md,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 158, 11, 0.3)',
     alignItems: 'center',
+  },
+  offlineBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F59E0B',
   },
   viewSwitcherBar: {
     flexDirection: 'row',
-    padding: 4,
+    padding: 3,
     marginHorizontal: Spacing.md,
-    marginTop: Spacing.xs,
-    borderRadius: BorderRadius.md,
+    marginTop: 6,
+    marginBottom: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(13, 20, 42, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   viewSwitcherBtn: {
     flex: 1,
     paddingVertical: 6,
     alignItems: 'center',
-    borderRadius: BorderRadius.sm,
+    borderRadius: 9,
   },
-  statsBar: {
+  viewSwitcherBtnActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  viewSwitcherText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  viewSwitcherTextActive: {
+    color: '#34D399',
+    fontWeight: '800',
+  },
+  listRootContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  metricsBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingVertical: Spacing.sm,
+    backgroundColor: 'rgba(13, 20, 42, 0.85)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     marginHorizontal: Spacing.md,
-    marginTop: Spacing.xs,
-    borderRadius: BorderRadius.md,
+    marginTop: 4,
+    marginBottom: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
   },
-  statItem: {
+  metricItem: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
   },
-  statDivider: {
+  metricDivider: {
     width: 1,
-    height: 24,
+    height: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
-  tabsContainer: {
+  metricValPending: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#FBBF24',
+  },
+  metricValDone: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#34D399',
+  },
+  metricValOverdue: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#FB7185',
+  },
+  metricValFocus: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#38BDF8',
+  },
+  metricLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  searchAndToolsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    gap: Spacing.xs,
+    marginBottom: 6,
   },
-  tabChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.full,
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 38,
+    backgroundColor: 'rgba(13, 20, 42, 0.9)',
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 10,
+    gap: 6,
   },
-  searchRow: {
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.xs,
+  searchIcon: {
+    fontSize: 14,
   },
   searchInput: {
-    height: 40,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.sm,
+    flex: 1,
+    height: '100%',
+    color: '#FFFFFF',
+    fontSize: 12.5,
+  },
+  clearSearchBtn: {
+    padding: 3,
+  },
+  clearSearchIcon: {
+    color: '#94A3B8',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  quickActionIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionIcon: {
+    fontSize: 15,
+  },
+  statusRowContainer: {
+    height: 34,
+    width: '100%',
+    marginBottom: 5,
+  },
+  statusRowContent: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    gap: 6,
+  },
+  statusPill: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusPillActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+    borderColor: '#10B981',
+  },
+  statusPillOverdue: {
+    borderColor: 'rgba(244, 63, 94, 0.5)',
+    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+  },
+  statusPillText: {
+    color: '#94A3B8',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  statusPillTextActive: {
+    color: '#F1F5F9',
+    fontWeight: '800',
+  },
+  subjectRowContainer: {
+    height: 30,
+    width: '100%',
+    marginBottom: 6,
+  },
+  subjectRowContent: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    gap: 6,
+  },
+  subjectFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  subjectFilterChipActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+    borderColor: '#38BDF8',
+  },
+  subjectFilterDot: {
+    fontSize: 10.5,
+  },
+  subjectFilterColorCircle: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  subjectFilterText: {
+    color: '#94A3B8',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  subjectFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  taskList: {
+    flex: 1,
+    width: '100%',
   },
   listContent: {
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.xl,
+    paddingTop: 4,
+    paddingBottom: 120,
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: Spacing.xl,
+    paddingVertical: Spacing.xl * 1.5,
   },
   taskCard: {
-    marginBottom: Spacing.sm,
-    padding: Spacing.md,
+    marginBottom: 10,
+    padding: 14,
+    backgroundColor: 'rgba(13, 20, 42, 0.88)',
+    borderRadius: 16,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  taskCardCompleted: {
+    opacity: 0.7,
+  },
+  taskCardOverdue: {
+    borderColor: 'rgba(244, 63, 94, 0.6)',
+    shadowColor: '#F43F5E',
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
   },
   taskHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: BorderRadius.sm,
+    width: 24,
+    height: 24,
+    borderRadius: 7,
     borderWidth: 2,
+    borderColor: 'rgba(52, 211, 153, 0.5)',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  checkboxDone: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
   },
   checkMark: {
     color: '#ffffff',
@@ -2030,10 +2397,16 @@ const styles = StyleSheet.create({
   },
   taskTitle: {
     fontSize: 15,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  taskTitleDone: {
+    textDecorationLine: 'line-through',
+    color: '#64748B',
   },
   prereqBanner: {
     paddingVertical: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     borderRadius: BorderRadius.xs,
     marginTop: 4,
   },
@@ -2104,16 +2477,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.xs,
-    gap: Spacing.sm,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   actionBtn: {
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    paddingHorizontal: 4,
-    minHeight: MinTouchTarget,
-    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  addBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: '#059669',
   },
   // Calendar Styles
   calendarContainer: {

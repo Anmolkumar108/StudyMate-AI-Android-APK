@@ -1,8 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
+  Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -19,6 +23,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { Subject, SubjectCreate, SubjectUpdate } from '@/types/subject';
 
 export default function SubjectsScreen() {
+  const router = useRouter();
   const theme = useTheme();
 
   const {
@@ -36,25 +41,63 @@ export default function SubjectsScreen() {
   // Search filter
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Semester filter state: 'all' or semester number
+  const [selectedSemester, setSelectedSemester] = useState<number | 'all'>('all');
+
   // Modals state
   const [isFormModalVisible, setIsFormModalVisible] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
 
-  // Filtered subjects by name, code, or description
+  // Entrance animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(15)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
+
+  // Distinct semesters list
+  const distinctSemesters = useMemo(() => {
+    const sems = new Set<number>();
+    subjects.forEach((s) => {
+      if (s.semester != null) sems.add(s.semester);
+    });
+    return Array.from(sems).sort((a, b) => a - b);
+  }, [subjects]);
+
+  // Filtered subjects by semester & search query
   const filteredSubjects = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return subjects;
+    let result = subjects;
+
+    if (selectedSemester !== 'all') {
+      result = result.filter((s) => s.semester === selectedSemester);
     }
-    const query = searchQuery.trim().toLowerCase();
-    return subjects.filter(
-      (s) =>
-        s.name.toLowerCase().includes(query) ||
-        (s.code && s.code.toLowerCase().includes(query)) ||
-        (s.description && s.description.toLowerCase().includes(query))
-    );
-  }, [subjects, searchQuery]);
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.name.toLowerCase().includes(query) ||
+          (s.code && s.code.toLowerCase().includes(query)) ||
+          (s.description && s.description.toLowerCase().includes(query))
+      );
+    }
+
+    return result;
+  }, [subjects, selectedSemester, searchQuery]);
 
   const handleOpenAddModal = () => {
     setSelectedSubject(null);
@@ -99,156 +142,300 @@ export default function SubjectsScreen() {
       includeBottomInset
       includeTabInset
       contentContainerStyle={styles.container}>
-      {/* SECTION A: Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <View style={styles.titleTextGroup}>
-            <View style={styles.tagRow}>
-              <ThemedText
-                type="smallBold"
-                style={{ color: theme.brandPrimary, letterSpacing: 0.8 }}>
-                ACADEMIC COURSES
+      <Animated.View
+        style={[
+          styles.animatedWrapper,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}>
+        {/* ========================================================================= */}
+        {/* 1. HEADER ROW: Back Button, Brand Pill, Title & + Add Button              */}
+        {/* ========================================================================= */}
+        <View style={styles.header}>
+          <View style={styles.headerTopBar}>
+            {/* Back Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+              ]}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/');
+                }
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back">
+              <Text style={styles.backArrow}>←</Text>
+            </Pressable>
+
+            {/* Title Group */}
+            <View style={styles.titleTextGroup}>
+              <View style={styles.tagRow}>
+                <ThemedText
+                  type="smallBold"
+                  style={{ color: '#C084FC', letterSpacing: 0.8 }}>
+                  ACADEMIC COURSES
+                </ThemedText>
+                {!isLoading && subjects.length > 0 ? (
+                  <Badge label={countLabel} variant="brand" size="sm" />
+                ) : null}
+              </View>
+              <ThemedText type="headlineLarge" style={styles.headerTitle}>
+                My Subjects
               </ThemedText>
-              {!isLoading && subjects.length > 0 ? (
-                <Badge label={countLabel} variant="brand" size="sm" />
-              ) : null}
             </View>
-            <ThemedText type="headlineLarge" style={styles.headerTitle}>
-              My Subjects
-            </ThemedText>
-            <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
-              Organize your academic journey.
-            </ThemedText>
+
+            {/* Add Subject Action Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.gradientAddBtn,
+                pressed && styles.gradientAddBtnPressed,
+              ]}
+              onPress={handleOpenAddModal}
+              accessibilityRole="button"
+              accessibilityLabel="Add New Subject">
+              <Text style={styles.addBtnIcon}>＋</Text>
+              <Text style={styles.addBtnText}>Add</Text>
+            </Pressable>
           </View>
 
-          {/* Add Subject Action Button */}
-          <Button
-            title="+ Add Subject"
-            variant="primary"
-            size="md"
-            onPress={handleOpenAddModal}
-            accessibilityLabel="Add New Subject"
-            style={styles.addButton}
-          />
+          <ThemedText type="bodySmall" style={styles.headerSubtitle}>
+            Organize your academic journey.
+          </ThemedText>
+
+          {/* ========================================================================= */}
+          {/* 2. BENTO STATS STRIP: Total Courses, Semesters & Timetable Shortcut      */}
+          {/* ========================================================================= */}
+          {subjects.length > 0 ? (
+            <View style={styles.bentoStrip}>
+              {/* Card 1: Total Courses */}
+              <View style={styles.bentoCard}>
+                <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(139, 92, 246, 0.2)' }]}>
+                  <Text style={styles.bentoIcon}>📚</Text>
+                </View>
+                <View style={styles.bentoTextGroup}>
+                  <Text style={styles.bentoVal}>{subjects.length}</Text>
+                  <Text style={styles.bentoLabel}>Total Courses</Text>
+                </View>
+              </View>
+
+              {/* Card 2: Semesters */}
+              <View style={styles.bentoCard}>
+                <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
+                  <Text style={styles.bentoIcon}>🎓</Text>
+                </View>
+                <View style={styles.bentoTextGroup}>
+                  <Text style={styles.bentoVal}>
+                    {distinctSemesters.length || 1}
+                  </Text>
+                  <Text style={styles.bentoLabel}>Semesters</Text>
+                </View>
+              </View>
+
+              {/* Card 3: Class Schedule Link */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.bentoCard,
+                  styles.bentoCardAction,
+                  pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] },
+                ]}
+                onPress={() => router.push('/timetable' as never)}>
+                <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(56, 189, 248, 0.2)' }]}>
+                  <Text style={styles.bentoIcon}>⏱️</Text>
+                </View>
+                <View style={styles.bentoTextGroup}>
+                  <Text style={[styles.bentoVal, { color: '#38BDF8', fontSize: 13 }]}>
+                    Schedule →
+                  </Text>
+                  <Text style={styles.bentoLabel}>Timetable</Text>
+                </View>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* ========================================================================= */}
+          {/* 3. SEARCH BAR                                                             */}
+          {/* ========================================================================= */}
+          {subjects.length > 0 || searchQuery ? (
+            <Input
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search by subject name or code..."
+              showClearButton
+              onClear={() => setSearchQuery('')}
+              leftElement={<Text style={styles.searchIcon}>🔍</Text>}
+              containerStyle={styles.searchContainer}
+            />
+          ) : null}
+
+          {/* ========================================================================= */}
+          {/* 4. HORIZONTAL SEMESTER FILTER TABS                                        */}
+          {/* ========================================================================= */}
+          {distinctSemesters.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsRow}>
+              {/* All Tab */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.filterPill,
+                  selectedSemester === 'all' && styles.filterPillActive,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => setSelectedSemester('all')}>
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    selectedSemester === 'all' && styles.filterPillTextActive,
+                  ]}>
+                  All ({subjects.length})
+                </Text>
+              </Pressable>
+
+              {/* Distinct Semester Tabs */}
+              {distinctSemesters.map((sem) => {
+                const count = subjects.filter((s) => s.semester === sem).length;
+                const isActive = selectedSemester === sem;
+                return (
+                  <Pressable
+                    key={`sem-${sem}`}
+                    style={({ pressed }) => [
+                      styles.filterPill,
+                      isActive && styles.filterPillActive,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={() => setSelectedSemester(sem)}>
+                    <Text
+                      style={[
+                        styles.filterPillText,
+                        isActive && styles.filterPillTextActive,
+                      ]}>
+                      Sem {sem} ({count})
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
         </View>
 
-        {/* SECTION B: Modern Search Bar */}
-        {subjects.length > 0 || searchQuery ? (
-          <Input
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search by subject name or code..."
-            showClearButton
-            onClear={() => setSearchQuery('')}
-            leftElement={<Text style={styles.searchIcon}>🔍</Text>}
-            containerStyle={styles.searchContainer}
-          />
+        {/* ========================================================================= */}
+        {/* 5. ERROR BANNER WITH RETRY                                                */}
+        {/* ========================================================================= */}
+        {error ? (
+          <Card variant="outlined" style={[styles.errorCard, { borderColor: theme.statusDanger }]}>
+            <ThemedText
+              type="bodyMedium"
+              style={{ color: theme.statusDanger, fontWeight: '500', flex: 1 }}>
+              {error}
+            </ThemedText>
+            <Button
+              title="Retry"
+              size="sm"
+              variant="secondary"
+              onPress={() => {
+                clearError();
+                fetchSubjects(true);
+              }}
+            />
+          </Card>
         ) : null}
-      </View>
 
-      {/* SECTION C: Error Banner with Retry */}
-      {error ? (
-        <Card variant="outlined" style={[styles.errorCard, { borderColor: theme.statusDanger }]}>
-          <ThemedText
-            type="bodyMedium"
-            style={{ color: theme.statusDanger, fontWeight: '500', flex: 1 }}>
-            {error}
-          </ThemedText>
-          <Button
-            title="Retry"
-            size="sm"
-            variant="secondary"
-            onPress={() => {
-              clearError();
-              fetchSubjects(true);
-            }}
+        {/* ========================================================================= */}
+        {/* 6. CONTENT STATES (Loading / Empty / Subject Cards List)                  */}
+        {/* ========================================================================= */}
+        {isLoading && !isRefreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#8B5CF6" />
+            <ThemedText
+              type="bodyMedium"
+              style={{ color: '#94A3B8', marginTop: Spacing.md }}>
+              Loading your academic subjects...
+            </ThemedText>
+          </View>
+        ) : subjects.length === 0 ? (
+          /* Empty State: No subjects in account */
+          <FlatList
+            data={[]}
+            renderItem={() => null}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={() => fetchSubjects(true)}
+                tintColor="#8B5CF6"
+                colors={['#8B5CF6']}
+              />
+            }
+            contentContainerStyle={styles.emptyScrollContent}
+            ListEmptyComponent={
+              <EmptyState
+                icon="📚"
+                title="No subjects added yet"
+                description="Organize your study goals, lecture notes, and revision by adding your academic courses."
+                actionLabel="+ Add Your First Subject"
+                onAction={handleOpenAddModal}
+                actionVariant="primary"
+              />
+            }
           />
-        </Card>
-      ) : null}
-
-      {/* SECTION D: Content States */}
-      {isLoading && !isRefreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.brandPrimary} />
-          <ThemedText
-            type="bodyMedium"
-            style={{ color: theme.textSecondary, marginTop: Spacing.md }}>
-            Loading your academic subjects...
-          </ThemedText>
-        </View>
-      ) : subjects.length === 0 ? (
-        /* Empty State: No subjects in account */
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => fetchSubjects(true)}
-              tintColor={theme.brandPrimary}
-              colors={[theme.brandPrimary]}
-            />
-          }
-          contentContainerStyle={styles.emptyScrollContent}
-          ListEmptyComponent={
-            <EmptyState
-              icon="📚"
-              title="No subjects added yet"
-              description="Organize your study goals, lecture notes, and revision by adding your academic courses."
-              actionLabel="+ Add Your First Subject"
-              onAction={handleOpenAddModal}
-              actionVariant="primary"
-            />
-          }
-        />
-      ) : filteredSubjects.length === 0 ? (
-        /* Empty State: No search results matching query */
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => fetchSubjects(true)}
-              tintColor={theme.brandPrimary}
-              colors={[theme.brandPrimary]}
-            />
-          }
-          contentContainerStyle={styles.emptyScrollContent}
-          ListEmptyComponent={
-            <EmptyState
-              icon="🔍"
-              title="No matching subjects found"
-              description={`No courses match "${searchQuery}". Try searching by course title or code.`}
-              actionLabel="Clear Search"
-              onAction={() => setSearchQuery('')}
-              actionVariant="secondary"
-            />
-          }
-        />
-      ) : (
-        /* Subject Cards List */
-        <FlatList
-          data={filteredSubjects}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <SubjectCard
-              subject={item}
-              onPress={() => handleOpenDetailModal(item)}
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => fetchSubjects(true)}
-              tintColor={theme.brandPrimary}
-              colors={[theme.brandPrimary]}
-            />
-          }
-        />
-      )}
+        ) : filteredSubjects.length === 0 ? (
+          /* Empty State: No search results matching query */
+          <FlatList
+            data={[]}
+            renderItem={() => null}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={() => fetchSubjects(true)}
+                tintColor="#8B5CF6"
+                colors={['#8B5CF6']}
+              />
+            }
+            contentContainerStyle={styles.emptyScrollContent}
+            ListEmptyComponent={
+              <EmptyState
+                icon="🔍"
+                title="No matching subjects found"
+                description={`No courses match "${searchQuery}". Try searching by course title or code.`}
+                actionLabel="Clear Search"
+                onAction={() => {
+                  setSearchQuery('');
+                  setSelectedSemester('all');
+                }}
+                actionVariant="secondary"
+              />
+            }
+          />
+        ) : (
+          /* Animated Subject Cards List */
+          <FlatList
+            data={filteredSubjects}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <SubjectCard
+                subject={item}
+                onPress={() => handleOpenDetailModal(item)}
+              />
+            )}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={() => fetchSubjects(true)}
+                tintColor="#8B5CF6"
+                colors={['#8B5CF6']}
+              />
+            }
+          />
+        )}
+      </Animated.View>
 
       {/* Add / Edit Form Modal */}
       <SubjectFormModal
@@ -284,15 +471,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  animatedWrapper: {
+    flex: 1,
+  },
   header: {
     paddingVertical: Spacing.xs,
-    gap: Spacing.sm,
+    gap: 10,
   },
-  headerTitleRow: {
+  headerTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Spacing.sm,
+    gap: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backArrow: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
   },
   titleTextGroup: {
     flex: 1,
@@ -304,17 +509,135 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   headerTitle: {
-    letterSpacing: -0.3,
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 24,
+    letterSpacing: -0.4,
   },
-  addButton: {
-    alignSelf: 'center',
+  headerSubtitle: {
+    color: '#94A3B8',
+    fontSize: 13,
   },
+  gradientAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  gradientAddBtnPressed: {
+    transform: [{ scale: 0.94 }],
+    opacity: 0.9,
+  },
+  addBtnIcon: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  addBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+
+  // Bento Stats
+  bentoStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  bentoCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(16, 24, 48, 0.75)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  bentoCardAction: {
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  bentoIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bentoIcon: {
+    fontSize: 14,
+  },
+  bentoTextGroup: {
+    flex: 1,
+    gap: 1,
+  },
+  bentoVal: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  bentoLabel: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+
+  // Search
   searchContainer: {
-    marginTop: Spacing.xs,
+    marginTop: 2,
   },
   searchIcon: {
-    fontSize: 16,
+    fontSize: 15,
   },
+
+  // Semester Filter Pills
+  filterPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  filterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  filterPillActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.25)',
+    borderColor: '#A855F7',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  filterPillText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterPillTextActive: {
+    color: '#F1F5F9',
+    fontWeight: '800',
+  },
+
   errorCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -330,7 +653,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xl,
+    paddingBottom: Spacing.xl * 2,
   },
   emptyScrollContent: {
     flexGrow: 1,

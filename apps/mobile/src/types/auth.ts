@@ -26,6 +26,14 @@ export interface UserResponse {
   last_login_at?: string | null;
 }
 
+export interface UserPreferencesUpdateRequest {
+  push_notifications_enabled?: boolean;
+  quiet_hours_start?: string | null;
+  quiet_hours_end?: string | null;
+  daily_study_goal_minutes?: number;
+  theme_preference?: string;
+}
+
 export interface RegisterRequest {
   email: string;
   password: string;
@@ -52,6 +60,52 @@ export interface TokenResponse {
 
 export interface LogoutRequest {
   refresh_token: string;
+}
+
+export interface GoogleAuthRequest {
+  id_token?: string;
+  access_token?: string;
+  device_name?: string;
+  device_os?: string;
+}
+
+export interface VerifyEmailRequest {
+  token: string;
+}
+
+export interface ResendVerificationRequest {
+  email: string;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordOtpRequest {
+  email: string;
+}
+
+export interface ResetPasswordOtpRequest {
+  email: string;
+  otp: string;
+  new_password: string;
+}
+
+export interface OtpResponse {
+  message: string;
+  email: string;
+  success: boolean;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  new_password: string;
+}
+
+export interface VerificationResponse {
+  message: string;
+  verified: boolean;
+  email?: string;
 }
 
 export interface MessageResponse {

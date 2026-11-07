@@ -100,14 +100,17 @@ export function ScreenWrapper({
     ? insets.top + (Platform.OS === 'android' ? 8 : 4)
     : 0;
 
-  const paddingBottom =
-    (includeBottomInset ? insets.bottom : 0) +
-    (includeTabInset ? BottomTabInset : 0) +
-    Spacing.md;
+  const userContentStyle = (StyleSheet.flatten(contentContainerStyle) || {}) as ViewStyle;
+  const userPaddingBottom = typeof userContentStyle.paddingBottom === 'number' ? userContentStyle.paddingBottom : 0;
 
-  const insetsStyle: ViewStyle = {
-    paddingTop,
-    paddingBottom,
+  const tabClearance = includeTabInset ? BottomTabInset + 35 : 0;
+  const bottomInset = includeBottomInset ? insets.bottom : 0;
+  const effectivePaddingBottom = Math.max(tabClearance + bottomInset + Spacing.md, userPaddingBottom + tabClearance);
+
+  const finalContentStyle: ViewStyle = {
+    ...userContentStyle,
+    paddingTop: userContentStyle.paddingTop ?? paddingTop,
+    paddingBottom: effectivePaddingBottom,
   };
 
   if (scrollable) {
@@ -119,8 +122,7 @@ export function ScreenWrapper({
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            insetsStyle,
-            contentContainerStyle,
+            finalContentStyle,
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -148,7 +150,7 @@ export function ScreenWrapper({
       style={[
         styles.root,
         { backgroundColor: effectiveBg },
-        insetsStyle,
+        { paddingTop, paddingBottom: effectivePaddingBottom },
         style,
       ]}>
       <View

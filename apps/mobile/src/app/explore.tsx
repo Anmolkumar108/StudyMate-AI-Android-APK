@@ -68,6 +68,68 @@ export default function StudyHubScreen() {
         </ThemedText>
       </View>
 
+      {/* Featured Headline Tool: Smart Study Planner (FR-10) */}
+      <Card
+        variant="default"
+        onPress={() => router.push('/study-planner' as never)}
+        accessibilityLabel="Open Smart Study Planner"
+        accessibilityHint="Daily AI study schedule, timeboxing, and timetable balance"
+        style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.cardHeaderLeft}>
+            <Text style={styles.cardHeaderIcon}>📅</Text>
+            <ThemedText type="headlineMedium" style={styles.cardTitle}>
+              Smart Study Planner
+            </ThemedText>
+          </View>
+          <Badge label="AI Powered" variant="brand" size="sm" />
+        </View>
+
+        <ThemedText type="bodyMedium" style={{ color: theme.textSecondary }}>
+          AI daily schedule and timeboxing. Calculates your study workload across upcoming exams, pending tasks, and university timetable gaps for a conflict-free study routine.
+        </ThemedText>
+
+        <Button
+          title="Open Study Planner →"
+          variant="primary"
+          size="md"
+          onPress={() => router.push('/study-planner' as never)}
+          accessibilityLabel="Launch Smart Study Planner"
+          style={{ marginTop: Spacing.xs }}
+        />
+      </Card>
+
+      {/* Study Analytics & Consistency Heatmap Card (FR-16) */}
+      <Card
+        variant="default"
+        onPress={() => router.push('/analytics' as never)}
+        accessibilityLabel="Open Study Analytics & Heatmap"
+        accessibilityHint="View 6-month GitHub consistency heatmap, subject distribution, and mastery trends"
+        style={[styles.card, { borderColor: 'rgba(6, 182, 212, 0.4)' }]}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.cardHeaderLeft}>
+            <Text style={styles.cardHeaderIcon}>📊</Text>
+            <ThemedText type="headlineMedium" style={styles.cardTitle}>
+              Study Analytics & Heatmap
+            </ThemedText>
+          </View>
+          <Badge label="Mastery Engine" variant="brand" size="sm" />
+        </View>
+
+        <ThemedText type="bodyMedium" style={{ color: theme.textSecondary }}>
+          6-month GitHub-style consistency calendar grid, proportional subject study hours, weekly focus momentum, and academic quiz mastery curve.
+        </ThemedText>
+
+        <Button
+          title="View Full Analytics →"
+          variant="primary"
+          size="md"
+          onPress={() => router.push('/analytics' as never)}
+          accessibilityLabel="Launch Study Analytics Screen"
+          style={{ marginTop: Spacing.xs }}
+        />
+      </Card>
+
       {/* Focus Timer Card (Active Tool) */}
       <Card
         variant="default"
@@ -250,6 +312,38 @@ export default function StudyHubScreen() {
         />
       </Card>
 
+      {/* Exam Preparation & Revision Countdown Card */}
+      <Card
+        variant="default"
+        onPress={() => router.push('/exams' as never)}
+        accessibilityLabel="Open Exam Preparation & Revision Countdown"
+        accessibilityHint="Track upcoming exams, syllabus completion, and AI revision plans"
+        style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.cardHeaderLeft}>
+            <Text style={styles.cardHeaderIcon}>⏰</Text>
+            <ThemedText type="headlineMedium" style={styles.cardTitle}>
+              Exams & Revision Countdown
+            </ThemedText>
+          </View>
+          <Badge label="AI Powered" variant="brand" size="sm" />
+        </View>
+
+        <ThemedText type="bodyMedium" style={{ color: theme.textSecondary }}>
+          Never miss an exam. Real-time countdown clocks, interactive syllabus topic mastery, target score tracking, and automated 3-phase AI revision schedules.
+        </ThemedText>
+
+        <Button
+          title="Open Exam Prep →"
+          variant="primary"
+          size="md"
+          onPress={() => router.push('/exams' as never)}
+          accessibilityLabel="Launch Exam Preparation"
+          style={{ marginTop: Spacing.xs }}
+        />
+      </Card>
+
+
       {/* AI Quiz Hub Card */}
       <Card
         variant="default"
@@ -311,13 +405,75 @@ export default function StudyHubScreen() {
           style={{ marginTop: Spacing.xs }}
         />
       </Card>
+
+      {/* Class Timetable & Routine Card */}
+      <Card
+        variant="default"
+        onPress={() => router.push('/timetable' as never)}
+        accessibilityLabel="Open Class Timetable"
+        accessibilityHint="Track your weekly lecture routine and class schedules"
+        style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.cardHeaderLeft}>
+            <Text style={styles.cardHeaderIcon}>📅</Text>
+            <ThemedText type="headlineMedium" style={styles.cardTitle}>
+              Class Timetable & Routine
+            </ThemedText>
+          </View>
+          <Badge label="Active" variant="success" size="sm" />
+        </View>
+
+        <ThemedText type="bodyMedium" style={{ color: theme.textSecondary }}>
+          Manage your weekly lectures, room numbers, professors, and class reminder alerts. Automatic time-clash detection.
+        </ThemedText>
+
+        <Button
+          title="Open Timetable →"
+          variant="primary"
+          size="md"
+          onPress={() => router.push('/timetable' as never)}
+          accessibilityLabel="Launch Timetable"
+          style={{ marginTop: Spacing.xs }}
+        />
+      </Card>
+
+      {/* Academic Subjects & Courses Card (Active Tool) */}
+      <Card
+        variant="default"
+        onPress={() => router.push('/subjects' as never)}
+        accessibilityLabel="Manage Academic Subjects"
+        accessibilityHint="Add and organize enrolled subjects and courses"
+        style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.cardHeaderLeft}>
+            <Text style={styles.cardHeaderIcon}>📚</Text>
+            <ThemedText type="headlineMedium" style={styles.cardTitle}>
+              Academic Subjects & Courses
+            </ThemedText>
+          </View>
+          <Badge label="Active" variant="success" size="sm" />
+        </View>
+
+        <ThemedText type="bodyMedium" style={{ color: theme.textSecondary }}>
+          Create and organize your university courses, semester codes, lecture notes, and syllabus tracking.
+        </ThemedText>
+
+        <Button
+          title="Manage & Add Subjects →"
+          variant="primary"
+          size="md"
+          onPress={() => router.push('/subjects' as never)}
+          accessibilityLabel="Launch Subjects Screen"
+          style={{ marginTop: Spacing.xs }}
+        />
+      </Card>
     </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: Spacing.xl,
+    paddingBottom: 130,
   },
   header: {
     gap: Spacing.xs,

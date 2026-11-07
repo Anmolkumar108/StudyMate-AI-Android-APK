@@ -8,12 +8,17 @@ import React, {
 } from 'react';
 
 import { authApi } from '../services/api/client';
+import { promptGoogleSignIn, signInWithGoogleDirect } from '../services/google-auth';
 import { clearTokens, getRefreshToken, hasTokens } from '../services/storage/token-storage';
 import {
   AuthStatus,
   LoginRequest,
+  OtpResponse,
   RegisterRequest,
+  ResetPasswordOtpRequest,
+  ResetPasswordRequest,
   UserResponse,
+  VerificationResponse,
 } from '../types/auth';
 
 interface AuthContextValue {
@@ -22,7 +27,15 @@ interface AuthContextValue {
   isLoading: boolean;
   error: string | null;
   login: (credentials: LoginRequest) => Promise<void>;
+  loginWithGoogle: () => Promise<boolean>;
+  loginWithGoogleEmail: (email: string) => Promise<boolean>;
   register: (payload: RegisterRequest) => Promise<UserResponse>;
+  verifyEmail: (token: string) => Promise<VerificationResponse>;
+  resendVerification: (email: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  requestPasswordResetOtp: (email: string) => Promise<OtpResponse>;
+  resetPasswordWithOtp: (payload: ResetPasswordOtpRequest) => Promise<void>;
+  resetPassword: (payload: ResetPasswordRequest) => Promise<void>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -125,12 +138,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const loginWithGoogle = useCallback(async (): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await promptGoogleSignIn();
+      if (result.cancelled) {
+        setIsLoading(false);
+        return false;
+      }
+      if (!result.success) {
+        throw new Error(result.error || 'Google authentication failed.');
+      }
+
+      const profile = await authApi.getMe();
+      if (profile.status === 'suspended') {
+        await clearTokens();
+        setStatus('unauthenticated');
+        setUser(null);
+        throw new Error('Account is suspended. Please contact support.');
+      }
+
+      setUser(profile);
+      setStatus('authenticated');
+      return true;
+    } catch (err) {
+      const message = (err as Error).message || 'Google Sign-In failed.';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loginWithGoogleEmail = useCallback(async (email: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await signInWithGoogleDirect(email);
+      if (!result.success) {
+        throw new Error(result.error || 'Google authentication failed.');
+      }
+
+      const profile = await authApi.getMe();
+      if (profile.status === 'suspended') {
+        await clearTokens();
+        setStatus('unauthenticated');
+        setUser(null);
+        throw new Error('Account is suspended. Please contact support.');
+      }
+
+      setUser(profile);
+      setStatus('authenticated');
+      return true;
+    } catch (err) {
+      const message = (err as Error).message || 'Google Sign-In failed.';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const register = useCallback(
     async (payload: RegisterRequest): Promise<UserResponse> => {
       setIsLoading(true);
       setError(null);
       try {
-        const newUser = await authApi.register(payload);
+        const newUser = await authApi.register(payload, true);
         return newUser;
       } catch (err) {
         const message = (err as Error).message || 'Registration failed.';
@@ -142,6 +217,95 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     []
   );
+
+  const verifyEmail = useCallback(async (token: string): Promise<VerificationResponse> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await authApi.verifyEmail(token);
+      return res;
+    } catch (err) {
+      const message = (err as Error).message || 'Email verification failed.';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const resendVerification = useCallback(async (email: string): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authApi.resendVerification(email);
+    } catch (err) {
+      const message = (err as Error).message || 'Unable to resend verification email.';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const forgotPassword = useCallback(async (email: string): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authApi.forgotPassword(email);
+    } catch (err) {
+      const message = (err as Error).message || 'Unable to request password reset.';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const requestPasswordResetOtp = useCallback(async (email: string): Promise<OtpResponse> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await authApi.requestPasswordResetOtp(email);
+      return res;
+    } catch (err) {
+      const message = (err as Error).message || 'Unable to send verification code.';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const resetPasswordWithOtp = useCallback(
+    async (payload: ResetPasswordOtpRequest): Promise<void> => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authApi.resetPasswordWithOtp(payload);
+      } catch (err) {
+        const message = (err as Error).message || 'Invalid or expired verification code.';
+        setError(message);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const resetPassword = useCallback(async (payload: ResetPasswordRequest): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authApi.resetPassword(payload);
+    } catch (err) {
+      const message = (err as Error).message || 'Password reset failed.';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const logout = useCallback(async () => {
     setIsLoading(true);
@@ -199,7 +363,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       error,
       login,
+      loginWithGoogle,
+      loginWithGoogleEmail,
       register,
+      verifyEmail,
+      resendVerification,
+      forgotPassword,
+      requestPasswordResetOtp,
+      resetPasswordWithOtp,
+      resetPassword,
       logout,
       logoutAll,
       refreshProfile,
@@ -211,7 +383,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       error,
       login,
+      loginWithGoogle,
+      loginWithGoogleEmail,
       register,
+      verifyEmail,
+      resendVerification,
+      forgotPassword,
+      requestPasswordResetOtp,
+      resetPasswordWithOtp,
+      resetPassword,
       logout,
       logoutAll,
       refreshProfile,

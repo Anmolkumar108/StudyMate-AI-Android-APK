@@ -11,20 +11,30 @@ import {
   BadRequestError,
   ConflictError,
   ForbiddenError,
+  ForgotPasswordOtpRequest,
+  ForgotPasswordRequest,
+  GoogleAuthRequest,
   InvalidResponseError,
   LoginRequest,
   LogoutRequest,
   MessageResponse,
   NetworkError,
   NotFoundError,
+  OtpResponse,
   RefreshTokenRequest,
   RegisterRequest,
+  ResendVerificationRequest,
+  ResetPasswordOtpRequest,
+  ResetPasswordRequest,
   ServerError,
   SessionResponse,
   TimeoutError,
   TokenResponse,
+  UserPreferencesUpdateRequest,
   UserResponse,
   ValidationError,
+  VerificationResponse,
+  VerifyEmailRequest,
   isDev,
 } from '../../types/auth';
 import { Subject, SubjectCreate, SubjectUpdate } from '../../types/subject';
@@ -54,6 +64,19 @@ import {
   AINoteGenerationResponse,
 } from '../../types/ai';
 import {
+  Exam,
+  ExamCreate,
+  ExamListResponse,
+  ExamUpcomingSummaryResponse,
+  ExamUpdate,
+} from '../../types/exam';
+import {
+  StudyBlockToggleRequest,
+  StudyPlan,
+  StudyPlanGenerateRequest,
+  StudyPlanRebalanceRequest,
+} from '../../types/planner';
+import {
   ConvertMissedToCardsRequest,
   ConvertMissedToCardsResponse,
   Quiz,
@@ -61,6 +84,17 @@ import {
   QuizGenerateRequest,
   QuizSubmitRequest,
 } from '../../types/quiz';
+import {
+  AnalyticsHeatmapResponse,
+  AnalyticsOverviewResponse,
+  StudySessionCreateRequest,
+  StudySessionResponse,
+  TodayStudySummary,
+} from '../../types/analytics';
+import {
+  UniversalSearchParams,
+  UniversalSearchResponse,
+} from '../../types/search';
 import {
   CreateTaskFromTemplateRequest,
   Task,
@@ -76,6 +110,18 @@ import {
   TaskTemplateCreate,
   TaskUpdate,
 } from '../../types/task';
+import {
+    AttendanceMarkRequest,
+    AttendanceRecord,
+    AttendanceSummaryResponse,
+    TimetableConflictCheckRequest,
+    TimetableConflictResponse,
+    TimetableEntry,
+    TimetableEntryBatchCreate,
+    TimetableEntryCreate,
+    TimetableEntryUpdate,
+    WeeklyTimetableResponse,
+} from '../../types/timetable';
 
 /**
  * Robust, typed API Client for StudyMate AI.
@@ -469,8 +515,11 @@ export async function apiRequest<T>(
  * Authentication API Service methods.
  */
 export const authApi = {
-  async register(payload: RegisterRequest): Promise<UserResponse> {
-    return apiRequest<UserResponse>(API_CONFIG.endpoints.register, {
+  async register(payload: RegisterRequest, autoActivate: boolean = false): Promise<UserResponse> {
+    const endpoint = autoActivate
+      ? `${API_CONFIG.endpoints.register}?auto_activate=true`
+      : API_CONFIG.endpoints.register;
+    return apiRequest<UserResponse>(endpoint, {
       method: 'POST',
       body: JSON.stringify(payload),
       requiresAuth: false,
@@ -492,6 +541,69 @@ export const authApi = {
     return tokens;
   },
 
+  async loginWithGoogle(payload: GoogleAuthRequest): Promise<TokenResponse> {
+    const tokens = await apiRequest<TokenResponse>(API_CONFIG.endpoints.googleAuth, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: false,
+    });
+
+    await saveTokens({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+    });
+
+    return tokens;
+  },
+
+  async verifyEmail(token: string): Promise<VerificationResponse> {
+    return apiRequest<VerificationResponse>(API_CONFIG.endpoints.verifyEmail, {
+      method: 'POST',
+      body: JSON.stringify({ token } satisfies VerifyEmailRequest),
+      requiresAuth: false,
+    });
+  },
+
+  async resendVerification(email: string): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(API_CONFIG.endpoints.resendVerification, {
+      method: 'POST',
+      body: JSON.stringify({ email } satisfies ResendVerificationRequest),
+      requiresAuth: false,
+    });
+  },
+
+  async forgotPassword(email: string): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(API_CONFIG.endpoints.forgotPassword, {
+      method: 'POST',
+      body: JSON.stringify({ email } satisfies ForgotPasswordRequest),
+      requiresAuth: false,
+    });
+  },
+
+  async requestPasswordResetOtp(email: string): Promise<OtpResponse> {
+    return apiRequest<OtpResponse>(API_CONFIG.endpoints.forgotPasswordOtp, {
+      method: 'POST',
+      body: JSON.stringify({ email } satisfies ForgotPasswordOtpRequest),
+      requiresAuth: false,
+    });
+  },
+
+  async resetPasswordWithOtp(payload: ResetPasswordOtpRequest): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(API_CONFIG.endpoints.resetPasswordOtp, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: false,
+    });
+  },
+
+  async resetPassword(payload: ResetPasswordRequest): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(API_CONFIG.endpoints.resetPassword, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: false,
+    });
+  },
+
   async refresh(refreshToken: string): Promise<TokenResponse> {
     const tokens = await apiRequest<TokenResponse>(API_CONFIG.endpoints.refresh, {
       method: 'POST',
@@ -510,6 +622,14 @@ export const authApi = {
   async getMe(): Promise<UserResponse> {
     return apiRequest<UserResponse>(API_CONFIG.endpoints.me, {
       method: 'GET',
+      requiresAuth: true,
+    });
+  },
+
+  async updatePreferences(payload: UserPreferencesUpdateRequest): Promise<UserResponse> {
+    return apiRequest<UserResponse>(API_CONFIG.endpoints.userPreferences, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
       requiresAuth: true,
     });
   },
@@ -1132,5 +1252,323 @@ export const quizApi = {
       method: 'DELETE',
       requiresAuth: true,
     });
+  },
+};
+
+export const timetableApi = {
+  async list(params?: { day_of_week?: number; subject_id?: string }): Promise<TimetableEntry[]> {
+    let endpoint: string = API_CONFIG.endpoints.timetable;
+    if (params) {
+      const qp: string[] = [];
+      if (params.day_of_week) qp.push(`day_of_week=${encodeURIComponent(params.day_of_week)}`);
+      if (params.subject_id) qp.push(`subject_id=${encodeURIComponent(params.subject_id)}`);
+      if (qp.length > 0) endpoint += `?${qp.join('&')}`;
+    }
+    return apiRequest<TimetableEntry[]>(endpoint, { requiresAuth: true });
+  },
+
+  async getWeekly(): Promise<WeeklyTimetableResponse> {
+    return apiRequest<WeeklyTimetableResponse>(API_CONFIG.endpoints.timetableWeekly, { requiresAuth: true });
+  },
+
+  async getToday(): Promise<TimetableEntry[]> {
+    return apiRequest<TimetableEntry[]>(API_CONFIG.endpoints.timetableToday, { requiresAuth: true });
+  },
+
+  async checkConflict(payload: TimetableConflictCheckRequest): Promise<TimetableConflictResponse> {
+    return apiRequest<TimetableConflictResponse>(API_CONFIG.endpoints.timetableCheckConflict, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async getById(id: string): Promise<TimetableEntry> {
+    return apiRequest<TimetableEntry>(API_CONFIG.endpoints.timetableById(id), { requiresAuth: true });
+  },
+
+  async create(payload: TimetableEntryCreate): Promise<TimetableEntry> {
+    return apiRequest<TimetableEntry>(API_CONFIG.endpoints.timetable, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async update(id: string, payload: TimetableEntryUpdate): Promise<TimetableEntry> {
+    return apiRequest<TimetableEntry>(API_CONFIG.endpoints.timetableById(id), {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async batchCreate(payload: TimetableEntryBatchCreate): Promise<TimetableEntry[]> {
+    return apiRequest<TimetableEntry[]>(API_CONFIG.endpoints.timetableBatch, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    return apiRequest<void>(API_CONFIG.endpoints.timetableById(id), {
+      method: 'DELETE',
+      requiresAuth: true,
+    });
+  },
+
+  async markAttendance(payload: AttendanceMarkRequest): Promise<AttendanceRecord> {
+    return apiRequest<AttendanceRecord>(API_CONFIG.endpoints.timetableAttendance, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async listAttendance(params?: { attendance_date?: string; subject_id?: string }): Promise<AttendanceRecord[]> {
+    let endpoint: string = API_CONFIG.endpoints.timetableAttendance;
+    if (params) {
+      const qp: string[] = [];
+      if (params.attendance_date) qp.push(`attendance_date=${encodeURIComponent(params.attendance_date)}`);
+      if (params.subject_id) qp.push(`subject_id=${encodeURIComponent(params.subject_id)}`);
+      if (qp.length > 0) endpoint += `?${qp.join('&')}`;
+    }
+    return apiRequest<AttendanceRecord[]>(endpoint, { requiresAuth: true });
+  },
+
+  async getAttendanceSummary(minimumRequired: number = 75.0): Promise<AttendanceSummaryResponse> {
+    const endpoint = `${API_CONFIG.endpoints.timetableAttendanceSummary}?minimum_required=${encodeURIComponent(minimumRequired)}`;
+    return apiRequest<AttendanceSummaryResponse>(endpoint, { requiresAuth: true });
+  },
+};
+
+export const examApi = {
+  async list(params?: { subject_id?: string; upcoming_only?: boolean }): Promise<ExamListResponse> {
+    let endpoint: string = API_CONFIG.endpoints.exams;
+    const qp: string[] = [];
+    if (params?.subject_id) qp.push(`subject_id=${encodeURIComponent(params.subject_id)}`);
+    if (params?.upcoming_only) qp.push('upcoming_only=true');
+    if (qp.length > 0) endpoint += `?${qp.join('&')}`;
+    return apiRequest<ExamListResponse>(endpoint, { requiresAuth: true });
+  },
+
+  async getById(id: string): Promise<Exam> {
+    return apiRequest<Exam>(API_CONFIG.endpoints.examById(id), { requiresAuth: true });
+  },
+
+  async create(payload: ExamCreate): Promise<Exam> {
+    return apiRequest<Exam>(API_CONFIG.endpoints.exams, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async update(id: string, payload: ExamUpdate): Promise<Exam> {
+    return apiRequest<Exam>(API_CONFIG.endpoints.examById(id), {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    return apiRequest<void>(API_CONFIG.endpoints.examById(id), {
+      method: 'DELETE',
+      requiresAuth: true,
+    });
+  },
+
+  async toggleTopic(
+    id: string,
+    topicId: string,
+    payload?: { is_completed?: boolean; confidence?: string }
+  ): Promise<Exam> {
+    return apiRequest<Exam>(API_CONFIG.endpoints.examToggleTopic(id, topicId), {
+      method: 'PATCH',
+      body: payload ? JSON.stringify(payload) : undefined,
+      requiresAuth: true,
+    });
+  },
+
+  async generateRevisionPlan(id: string): Promise<Exam> {
+    return apiRequest<Exam>(API_CONFIG.endpoints.examGeneratePlan(id), {
+      method: 'POST',
+      requiresAuth: true,
+    });
+  },
+
+  async getUpcomingSummary(): Promise<ExamUpcomingSummaryResponse> {
+    return apiRequest<ExamUpcomingSummaryResponse>(API_CONFIG.endpoints.examUpcomingSummary, {
+      requiresAuth: true,
+    });
+  },
+};
+
+/**
+ * Smart Study Planner API Service methods (FR-10).
+ */
+export const studyPlannerApi = {
+  async getTodayPlan(): Promise<StudyPlan | null> {
+    return apiRequest<StudyPlan | null>(API_CONFIG.endpoints.studyPlannerToday, {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
+
+  async getPlanByDate(planDate: string): Promise<StudyPlan | null> {
+    return apiRequest<StudyPlan | null>(API_CONFIG.endpoints.studyPlannerByDate(planDate), {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
+
+  async getPlanById(id: string): Promise<StudyPlan> {
+    return apiRequest<StudyPlan>(API_CONFIG.endpoints.studyPlannerById(id), {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
+
+  async generate(payload: StudyPlanGenerateRequest = {}): Promise<StudyPlan> {
+    return apiRequest<StudyPlan>(API_CONFIG.endpoints.studyPlannerGenerate, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async toggleBlock(id: string, blockId: string, payload: StudyBlockToggleRequest): Promise<StudyPlan> {
+    return apiRequest<StudyPlan>(API_CONFIG.endpoints.studyPlannerToggleBlock(id, blockId), {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async rebalance(id: string, payload: StudyPlanRebalanceRequest = {}): Promise<StudyPlan> {
+    return apiRequest<StudyPlan>(API_CONFIG.endpoints.studyPlannerRebalance(id), {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+};
+
+/**
+ * Study Sessions API Service (FR-12 & FR-16).
+ */
+export const studySessionApi = {
+  async logSession(payload: StudySessionCreateRequest): Promise<StudySessionResponse> {
+    return apiRequest<StudySessionResponse>(API_CONFIG.endpoints.studySessionsLog, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requiresAuth: true,
+    });
+  },
+
+  async getTodaySummary(): Promise<TodayStudySummary> {
+    return apiRequest<TodayStudySummary>(API_CONFIG.endpoints.studySessionsToday, {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
+};
+
+/**
+ * Study Analytics & Heatmap API Service (FR-16).
+ */
+export const analyticsApi = {
+  async getOverview(timeframe: 'week' | 'month' | 'all' = 'all'): Promise<AnalyticsOverviewResponse> {
+    const url = `${API_CONFIG.endpoints.analyticsOverview}?timeframe=${encodeURIComponent(timeframe)}`;
+    return apiRequest<AnalyticsOverviewResponse>(url, {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
+
+  async getHeatmap(days: number = 180): Promise<AnalyticsHeatmapResponse> {
+    const url = `${API_CONFIG.endpoints.analyticsHeatmap}?days=${days}`;
+    return apiRequest<AnalyticsHeatmapResponse>(url, {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
+};
+
+/**
+ * Universal Search API Service (FR-18).
+ */
+export const searchApi = {
+  async universalSearch(params: UniversalSearchParams): Promise<UniversalSearchResponse> {
+    const qp: string[] = [`q=${encodeURIComponent(params.query.trim())}`];
+    if (params.category && params.category !== 'all') {
+      qp.push(`category=${encodeURIComponent(params.category)}`);
+    }
+    if (params.subjectId) {
+      qp.push(`subject_id=${encodeURIComponent(params.subjectId)}`);
+    }
+    if (params.limit !== undefined) {
+      qp.push(`limit=${params.limit}`);
+    }
+    if (params.offset !== undefined) {
+      qp.push(`offset=${params.offset}`);
+    }
+    const url = `${API_CONFIG.endpoints.search}?${qp.join('&')}`;
+    return apiRequest<UniversalSearchResponse>(url, {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
+};
+
+/**
+ * User Security & GDPR Privacy API Service (FR-01, FR-02 & GDPR Compliance).
+ */
+export interface ChangePasswordResponse {
+  message: string;
+  access_token?: string | null;
+  refresh_token?: string | null;
+  token_type?: string;
+}
+
+export const userSecurityApi = {
+  async changePassword(currentPassword: string, newPassword: string): Promise<ChangePasswordResponse> {
+    const res = await apiRequest<ChangePasswordResponse>(API_CONFIG.endpoints.changePassword, {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+      requiresAuth: true,
+    });
+    if (res?.access_token && res?.refresh_token) {
+      await saveTokens({
+        accessToken: res.access_token,
+        refreshToken: res.refresh_token,
+      });
+    }
+    return res;
+  },
+
+  async exportUserData(): Promise<Record<string, any>> {
+    return apiRequest<Record<string, any>>(API_CONFIG.endpoints.exportData, {
+      method: 'POST',
+      requiresAuth: true,
+    });
+  },
+
+  async deleteAccount(password: string, reason?: string): Promise<MessageResponse> {
+    const res = await apiRequest<MessageResponse>(API_CONFIG.endpoints.deleteAccount, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        password,
+        reason: reason || 'User requested account closure',
+      }),
+      requiresAuth: true,
+    });
+    await clearTokens();
+    return res;
   },
 };

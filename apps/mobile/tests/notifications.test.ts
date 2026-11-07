@@ -2,19 +2,35 @@ import assert from 'node:assert';
 import { beforeEach, describe, it } from 'node:test';
 
 import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
   cancelTaskReminder,
   inMemoryNotificationAdapter,
+  isWithinQuietHours,
   registerForPushNotificationsAsync,
   resetNotificationAdapter,
+  resetNotificationPreferencesForTest,
+  scheduleClassReminder,
+  scheduleDailyStreakReminder,
+  scheduleExamReminders,
   scheduleTaskReminder,
   sendImmediateNotification,
+  sendTestNotification,
   setNotificationAdapter,
+  setNotificationPreferencesForTest,
 } from '../src/services/notifications';
+
+function getFutureDaytimeDate(daysAhead = 1, hour = 14): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  d.setHours(hour, 0, 0, 0);
+  return d.toISOString();
+}
 
 describe('Task Notifications & Alarm Reminders', () => {
   beforeEach(() => {
     setNotificationAdapter(inMemoryNotificationAdapter);
     inMemoryNotificationAdapter.clear();
+    resetNotificationPreferencesForTest();
   });
 
   it('registers notification channels and permissions successfully', async () => {
@@ -23,7 +39,7 @@ describe('Task Notifications & Alarm Reminders', () => {
   });
 
   it('schedules an alarm reminder with Hindi notification body for future task', async () => {
-    const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // Tomorrow
+    const futureDate = getFutureDaytimeDate(1, 14); // Tomorrow 2:00 PM (outside quiet hours)
     const result = await scheduleTaskReminder({
       taskId: 'assignment-101',
       taskTitle: 'Math Assignment 4',
@@ -39,7 +55,7 @@ describe('Task Notifications & Alarm Reminders', () => {
   });
 
   it('schedules reminder with offset prefix (e.g. 15 minutes before)', async () => {
-    const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2 hours in future
+    const futureDate = getFutureDaytimeDate(1, 16); // Tomorrow 4:00 PM
     const result = await scheduleTaskReminder({
       taskId: 'assignment-102',
       taskTitle: 'Physics Lab Viva',
@@ -76,7 +92,7 @@ describe('Task Notifications & Alarm Reminders', () => {
   });
 
   it('cancels a scheduled reminder when completed or deleted', async () => {
-    const futureDate = new Date(Date.now() + 3600000).toISOString();
+    const futureDate = getFutureDaytimeDate(1, 15);
     await scheduleTaskReminder({
       taskId: 'task-to-cancel',
       taskTitle: 'Chemistry Quiz',
@@ -95,5 +111,79 @@ describe('Task Notifications & Alarm Reminders', () => {
       'Test message delivered successfully'
     );
     assert.strictEqual(inMemoryNotificationAdapter.scheduled.size, 1);
+  });
+
+  it('schedules class routine reminder with class-reminders channel', async () => {
+    const id = await scheduleClassReminder({
+      id: 'class-01',
+      day_of_week: 1,
+      start_time: '14:30:00',
+      subject_name: 'Database Systems',
+      room: 'Lab 3',
+      reminder_minutes_before: 15,
+    });
+    assert.strictEqual(id, 'class-reminder-class-01');
+    const scheduled = inMemoryNotificationAdapter.scheduled.get('class-reminder-class-01');
+    assert.ok(scheduled);
+    assert.strictEqual(scheduled.channelId, 'class-reminders');
+    assert.ok(scheduled.title.includes('Database Systems'));
+    assert.ok(scheduled.body.includes('15 minutes'));
+  });
+
+  it('schedules daily study streak reminder with streak-reminders channel', async () => {
+    const id = await scheduleDailyStreakReminder(5);
+    assert.strictEqual(id, 'daily-streak-reminder');
+    const scheduled = inMemoryNotificationAdapter.scheduled.get('daily-streak-reminder');
+    assert.ok(scheduled);
+    assert.strictEqual(scheduled.channelId, 'streak-reminders');
+    assert.ok(scheduled.title.includes('5-Day'));
+  });
+
+  it('schedules upcoming exam countdown reminders with exam-alerts channel', async () => {
+    const examDate = new Date(Date.now() + 5 * 86400 * 1000).toISOString();
+    const ids = await scheduleExamReminders({
+      id: 'exam-42',
+      title: 'Operating Systems Midterm',
+      exam_date: examDate,
+      location: 'Hall A',
+    });
+    assert.ok(ids.length > 0);
+    const scheduled3d = inMemoryNotificationAdapter.scheduled.get('exam-reminder-exam-42-3d');
+    assert.ok(scheduled3d);
+    assert.strictEqual(scheduled3d.channelId, 'exam-alerts');
+    assert.ok(scheduled3d.title.includes('Operating Systems Midterm'));
+  });
+
+  it('correctly detects quiet hours time window', () => {
+    const prefs = {
+      ...DEFAULT_NOTIFICATION_PREFERENCES,
+      quietHoursEnabled: true,
+      quietHoursStart: '22:00',
+      quietHoursEnd: '07:00',
+    };
+
+    // 23:30 is in quiet hours
+    const lateNight = new Date();
+    lateNight.setHours(23, 30, 0, 0);
+    assert.strictEqual(isWithinQuietHours(lateNight, prefs), true);
+
+    // 04:15 is in quiet hours
+    const earlyMorning = new Date();
+    earlyMorning.setHours(4, 15, 0, 0);
+    assert.strictEqual(isWithinQuietHours(earlyMorning, prefs), true);
+
+    // 14:00 is NOT in quiet hours
+    const afternoon = new Date();
+    afternoon.setHours(14, 0, 0, 0);
+    assert.strictEqual(isWithinQuietHours(afternoon, prefs), false);
+  });
+
+  it('triggers test notifications across multiple channels', async () => {
+    await sendTestNotification('class');
+    await sendTestNotification('task');
+    await sendTestNotification('streak');
+    await sendTestNotification('exam');
+
+    assert.ok(inMemoryNotificationAdapter.scheduled.size >= 4);
   });
 });

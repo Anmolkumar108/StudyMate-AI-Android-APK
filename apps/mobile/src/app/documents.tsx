@@ -3,11 +3,9 @@ import { File } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -125,7 +123,7 @@ export default function DocumentsScreen() {
           filename: fileName,
           file_base64: base64Data,
         });
-      } catch (b64Err) {
+      } catch {
         // Fallback to FormData multipart upload if base64 read encountered an issue
         const formData = new FormData();
         formData.append('title', title || 'Lecture PDF Document');

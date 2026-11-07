@@ -9,15 +9,14 @@
       "@/assets/*": [
         "./assets/*"
       ]
-    }
+    },
+    "types": ["node"]
   },
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "tests/**/*.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-  ],
-  "exclude": [
-    "tests"
   ]
 }

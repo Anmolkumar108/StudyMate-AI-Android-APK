@@ -1,11 +1,15 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Linking,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
+  TextInput,
   useColorScheme,
   View,
 } from 'react-native';
@@ -15,6 +19,23 @@ import { Badge, Button, Card, ScreenWrapper } from '@/components/ui';
 import { BorderRadius, MinTouchTarget, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
+import { authApi, userSecurityApi } from '@/services/api/client';
+import {
+  BiometricCapability,
+  authenticateWithBiometrics,
+  checkBiometricCapability,
+  isBiometricLockEnabled,
+  setBiometricLockEnabled,
+} from '@/services/biometrics';
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  NotificationPreferences,
+  cancelAllReminders,
+  loadNotificationPreferences,
+  registerForPushNotificationsAsync,
+  saveNotificationPreferences,
+  sendTestNotification,
+} from '@/services/notifications';
 
 /**
  * Safely resolves the project version from Expo configuration or fallback.
@@ -37,6 +58,251 @@ export default function SettingsScreen() {
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(
+    DEFAULT_NOTIFICATION_PREFERENCES
+  );
+
+  useEffect(() => {
+    loadNotificationPreferences()
+      .then((loaded) => {
+        if (user) {
+          setNotifPrefs({
+            ...loaded,
+            pushNotificationsEnabled:
+              user.push_notifications_enabled ?? loaded.pushNotificationsEnabled,
+            quietHoursStart: user.quiet_hours_start
+              ? user.quiet_hours_start.slice(0, 5)
+              : loaded.quietHoursStart,
+            quietHoursEnd: user.quiet_hours_end
+              ? user.quiet_hours_end.slice(0, 5)
+              : loaded.quietHoursEnd,
+          });
+        } else {
+          setNotifPrefs(loaded);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const handleToggleMasterPush = async (enabled: boolean) => {
+    const updated = { ...notifPrefs, pushNotificationsEnabled: enabled };
+    setNotifPrefs(updated);
+    await saveNotificationPreferences({ pushNotificationsEnabled: enabled });
+
+    if (!enabled) {
+      await cancelAllReminders();
+    } else {
+      await registerForPushNotificationsAsync();
+    }
+
+    try {
+      await authApi.updatePreferences({ push_notifications_enabled: enabled });
+    } catch {
+      // Offline fallback
+    }
+  };
+
+  const handleUpdatePref = async <K extends keyof NotificationPreferences>(
+    key: K,
+    val: NotificationPreferences[K]
+  ) => {
+    const updated = { ...notifPrefs, [key]: val };
+    setNotifPrefs(updated);
+    await saveNotificationPreferences({ [key]: val });
+  };
+
+  const handleTriggerTest = async (type: 'class' | 'task' | 'streak' | 'exam') => {
+    try {
+      await sendTestNotification(type);
+      Alert.alert(
+        '🔔 Real Notification Sent',
+        `A real ${type.toUpperCase()} test notification has been sent! Check your Android notification shade / status bar banner.`
+      );
+    } catch (err: any) {
+      if (err?.message === 'PERMISSION_NOT_GRANTED') {
+        Alert.alert(
+          'Notification Permission Required',
+          'Android on your device has blocked notifications for StudyMate AI. Tap "Open Settings" to enable Notifications.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                Linking.openSettings().catch(() => {});
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Notification Alert',
+          err?.message || 'Could not send test notification. Please verify notification permissions.'
+        );
+      }
+    }
+  };
+
+  // Biometric state
+  const [biometricCap, setBiometricCap] = useState<BiometricCapability | null>(null);
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
+
+  // Change password modal state
+  const [changePassModalVisible, setChangePassModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [isChangingPass, setIsChangingPass] = useState(false);
+
+  // GDPR export & account delete state
+  const [isExportingData, setIsExportingData] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  useEffect(() => {
+    checkBiometricCapability()
+      .then(setBiometricCap)
+      .catch(() => {});
+    isBiometricLockEnabled()
+      .then(setIsBiometricEnabled)
+      .catch(() => {});
+  }, []);
+
+  const handleToggleBiometricLock = async (enabled: boolean) => {
+    if (enabled) {
+      const authRes = await authenticateWithBiometrics('Verify fingerprint to activate Biometric Lock');
+      if (!authRes.success) {
+        Alert.alert(
+          'Biometric Verification Failed',
+          authRes.error || 'Could not verify your biometric credentials. Lock was not enabled.'
+        );
+        return;
+      }
+      await setBiometricLockEnabled(true);
+      setIsBiometricEnabled(true);
+      Alert.alert(
+        '🔒 Biometric Lock Enabled',
+        'StudyMate AI will now require fingerprint or biometric confirmation to open.'
+      );
+    } else {
+      const authRes = await authenticateWithBiometrics('Verify fingerprint to disable Biometric Lock');
+      if (!authRes.success) {
+        Alert.alert(
+          'Biometric Verification Failed',
+          authRes.error || 'Authentication required to disable lock.'
+        );
+        return;
+      }
+      await setBiometricLockEnabled(false);
+      setIsBiometricEnabled(false);
+      Alert.alert('Unlocked', 'Biometric app lock has been turned off.');
+    }
+  };
+
+  const handleTestBiometricSensor = async () => {
+    const authRes = await authenticateWithBiometrics('StudyMate AI Fingerprint Sensor Test');
+    if (authRes.success) {
+      Alert.alert('✅ Biometric Sensor Verified', 'Fingerprint matched successfully! Hardware and enrollment are in perfect working order.');
+    } else {
+      Alert.alert('Biometric Test', authRes.error || 'Verification canceled or failed.');
+    }
+  };
+
+  const handleChangePasswordSubmit = async () => {
+    if (!currentPassword) {
+      Alert.alert('Validation Error', 'Please enter your current password.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      Alert.alert('Password Policy', 'New password must contain at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Mismatch', 'New password and confirmation do not match.');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      Alert.alert('Invalid Password', 'New password cannot be identical to current password.');
+      return;
+    }
+
+    try {
+      setIsChangingPass(true);
+      const res = await userSecurityApi.changePassword(currentPassword, newPassword);
+      setChangePassModalVisible(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert('Success', res.message || 'Password updated successfully with Argon2id encryption.');
+    } catch (err: any) {
+      Alert.alert('Change Password Error', err?.message || 'Could not update password. Please check your current password.');
+    } finally {
+      setIsChangingPass(false);
+    }
+  };
+
+  const handleExportAllData = async () => {
+    try {
+      setIsExportingData(true);
+      const data = await userSecurityApi.exportUserData();
+      const analytics = (data.analytics as Record<string, number>) || {};
+      Alert.alert(
+        '📦 Student Data Export Ready',
+        `Your complete academic data archive has been generated successfully!\n\n` +
+          `• Profile: ${data.user_profile?.email || 'Active'}\n` +
+          `• Subjects: ${data.subjects?.length || 0}\n` +
+          `• Notes: ${data.notes?.length || 0}\n` +
+          `• Tasks: ${data.tasks?.length || 0}\n` +
+          `• Flashcards: ${data.flashcards?.length || 0} decks\n` +
+          `• Exams: ${data.exams?.length || 0}\n` +
+          `• Focus Time: ${analytics.total_focus_minutes || 0} minutes\n\n` +
+          `All student intellectual property and revision records are fully preserved under GDPR compliance.`,
+        [{ text: 'Great!' }]
+      );
+    } catch (err: any) {
+      Alert.alert('Export Error', err?.message || 'Failed to generate data export.');
+    } finally {
+      setIsExportingData(false);
+    }
+  };
+
+  const handleDeleteAccountSubmit = async () => {
+    if (!deletePassword) {
+      Alert.alert('Password Required', 'Please enter your password to confirm permanent account deletion.');
+      return;
+    }
+
+    Alert.alert(
+      'FINAL WARNING: Delete Account',
+      'This action is irreversible. All your notes, study schedules, flashcards, exams, and focus history will be permanently wiped.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Permanently Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsDeletingAccount(true);
+              await userSecurityApi.deleteAccount(deletePassword, deleteReason);
+              await cancelAllReminders();
+              await setBiometricLockEnabled(false);
+              setDeleteModalVisible(false);
+              Alert.alert('Account Deleted', 'Your account and data have been permanently removed.');
+              await logout();
+              router.replace('/(auth)/login');
+            } catch (err: any) {
+              Alert.alert('Deletion Error', err?.message || 'Incorrect password. Account deletion failed.');
+            } finally {
+              setIsDeletingAccount(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const appVersion = useMemo(() => getAppVersion(), []);
 
@@ -261,7 +527,332 @@ export default function SettingsScreen() {
         </Card>
       </View>
 
-      {/* SECTION 3: Session & Account Security */}
+      {/* SECTION 3: Notifications & Reminders */}
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeaderRow}>
+          <ThemedText type="titleMedium" style={styles.sectionHeading}>
+            Notifications & Reminders
+          </ThemedText>
+          <Badge
+            label={notifPrefs.pushNotificationsEnabled ? 'Active' : 'Muted'}
+            variant={notifPrefs.pushNotificationsEnabled ? 'success' : 'neutral'}
+            size="sm"
+          />
+        </View>
+
+        <Card variant="outlined" style={styles.notifCard}>
+          {/* Master Push Toggle */}
+          <View style={styles.notifHeaderRow}>
+            <View style={[styles.iconBadge, { backgroundColor: theme.badgeBrandBackground }]}>
+              <Text style={styles.sectionIcon}>🔔</Text>
+            </View>
+            <View style={styles.headerTextGroup}>
+              <ThemedText type="titleMedium">Push Alerts & Alarms</ThemedText>
+              <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                Master toggle for Android local & system notifications
+              </ThemedText>
+            </View>
+            <Switch
+              value={notifPrefs.pushNotificationsEnabled}
+              onValueChange={handleToggleMasterPush}
+              trackColor={{ false: theme.borderSubtle, true: theme.brandPrimary }}
+              thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
+            />
+          </View>
+
+          {notifPrefs.pushNotificationsEnabled && (
+            <>
+              <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+              {/* Granular Option 1: Class Schedule Reminders */}
+              <View style={styles.prefRow}>
+                <View style={styles.prefTextGroup}>
+                  <ThemedText type="bodyMedium" style={{ fontWeight: '600' }}>
+                    Class Schedule Alerts
+                  </ThemedText>
+                  <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                    Vibrate & ring before college lectures
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={notifPrefs.classRemindersEnabled}
+                  onValueChange={(val) => handleUpdatePref('classRemindersEnabled', val)}
+                  trackColor={{ false: theme.borderSubtle, true: theme.brandPrimary }}
+                  thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
+                />
+              </View>
+
+              {notifPrefs.classRemindersEnabled && (
+                <View style={styles.pillSelectorContainer}>
+                  <ThemedText type="bodySmall" style={{ color: theme.textSecondary, marginBottom: 4 }}>
+                    Alert advance timing:
+                  </ThemedText>
+                  <View style={styles.timingPillsRow}>
+                    {[10, 15, 30].map((mins) => {
+                      const isSelected = notifPrefs.classReminderAdvanceMinutes === mins;
+                      return (
+                        <Pressable
+                          key={mins}
+                          onPress={() => handleUpdatePref('classReminderAdvanceMinutes', mins)}
+                          style={[
+                            styles.timingPill,
+                            {
+                              backgroundColor: isSelected
+                                ? theme.brandPrimary
+                                : theme.backgroundElement,
+                              borderColor: isSelected ? theme.brandPrimary : theme.borderSubtle,
+                            },
+                          ]}>
+                          <Text
+                            style={[
+                              styles.timingPillText,
+                              { color: isSelected ? '#FFFFFF' : theme.text },
+                            ]}>
+                            {mins} mins before
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+              {/* Granular Option 2: Task Deadlines */}
+              <View style={styles.prefRow}>
+                <View style={styles.prefTextGroup}>
+                  <ThemedText type="bodyMedium" style={{ fontWeight: '600' }}>
+                    Task & Homework Deadlines
+                  </ThemedText>
+                  <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                    Urgent alerts 24h & 2h before assignment due time
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={notifPrefs.taskDeadlinesEnabled}
+                  onValueChange={(val) => handleUpdatePref('taskDeadlinesEnabled', val)}
+                  trackColor={{ false: theme.borderSubtle, true: theme.brandPrimary }}
+                  thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
+                />
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+              {/* Granular Option 3: Daily Streak Habit */}
+              <View style={styles.prefRow}>
+                <View style={styles.prefTextGroup}>
+                  <ThemedText type="bodyMedium" style={{ fontWeight: '600' }}>
+                    Daily Streak Protection
+                  </ThemedText>
+                  <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                    Evening nudge to log focus & maintain consistency
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={notifPrefs.streakRemindersEnabled}
+                  onValueChange={(val) => handleUpdatePref('streakRemindersEnabled', val)}
+                  trackColor={{ false: theme.borderSubtle, true: theme.brandPrimary }}
+                  thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
+                />
+              </View>
+
+              {notifPrefs.streakRemindersEnabled && (
+                <View style={styles.pillSelectorContainer}>
+                  <ThemedText type="bodySmall" style={{ color: theme.textSecondary, marginBottom: 4 }}>
+                    Evening reminder time:
+                  </ThemedText>
+                  <View style={styles.timingPillsRow}>
+                    {[
+                      { time: '18:00', label: '6:00 PM' },
+                      { time: '19:00', label: '7:00 PM' },
+                      { time: '20:00', label: '8:00 PM' },
+                      { time: '21:00', label: '9:00 PM' },
+                    ].map((slot) => {
+                      const isSelected = notifPrefs.streakReminderTime === slot.time;
+                      return (
+                        <Pressable
+                          key={slot.time}
+                          onPress={() => handleUpdatePref('streakReminderTime', slot.time)}
+                          style={[
+                            styles.timingPill,
+                            {
+                              backgroundColor: isSelected
+                                ? theme.brandPrimary
+                                : theme.backgroundElement,
+                              borderColor: isSelected ? theme.brandPrimary : theme.borderSubtle,
+                            },
+                          ]}>
+                          <Text
+                            style={[
+                              styles.timingPillText,
+                              { color: isSelected ? '#FFFFFF' : theme.text },
+                            ]}>
+                            {slot.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+              {/* Granular Option 4: Exam Milestones */}
+              <View style={styles.prefRow}>
+                <View style={styles.prefTextGroup}>
+                  <ThemedText type="bodyMedium" style={{ fontWeight: '600' }}>
+                    Exam Milestone Countdowns
+                  </ThemedText>
+                  <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                    Priority alarms 3 days & 1 day prior to exams
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={notifPrefs.examAlertsEnabled}
+                  onValueChange={(val) => handleUpdatePref('examAlertsEnabled', val)}
+                  trackColor={{ false: theme.borderSubtle, true: theme.brandPrimary }}
+                  thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
+                />
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+              {/* Granular Option 5: Quiet Hours */}
+              <View style={styles.prefRow}>
+                <View style={styles.prefTextGroup}>
+                  <ThemedText type="bodyMedium" style={{ fontWeight: '600' }}>
+                    Quiet Hours (Do Not Disturb)
+                  </ThemedText>
+                  <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                    Mute all study reminders between 10:00 PM – 7:00 AM
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={notifPrefs.quietHoursEnabled}
+                  onValueChange={(val) => handleUpdatePref('quietHoursEnabled', val)}
+                  trackColor={{ false: theme.borderSubtle, true: theme.brandPrimary }}
+                  thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
+                />
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+              {/* Real Notification Test Center */}
+              <View style={[styles.testCenterBox, { backgroundColor: theme.backgroundElement }]}>
+                <View style={styles.testCenterHeader}>
+                  <Text style={{ fontSize: 18 }}>⚡</Text>
+                  <ThemedText type="bodyLarge" style={{ fontWeight: '700' }}>
+                    Real Android Notification Test Center
+                  </ThemedText>
+                </View>
+                <ThemedText type="bodySmall" style={{ color: theme.textSecondary, marginBottom: 8 }}>
+                  Tap any button to instantly fire an authentic Android system alert into your status bar:
+                </ThemedText>
+
+                <View style={styles.testButtonsGrid}>
+                  <Pressable
+                    style={[styles.testActionBtn, { borderColor: theme.borderSubtle }]}
+                    onPress={() => handleTriggerTest('class')}>
+                    <Text style={styles.testActionBtnIcon}>🔔</Text>
+                    <Text style={[styles.testActionBtnText, { color: theme.text }]}>
+                      Class Alert
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.testActionBtn, { borderColor: theme.borderSubtle }]}
+                    onPress={() => handleTriggerTest('task')}>
+                    <Text style={styles.testActionBtnIcon}>⏰</Text>
+                    <Text style={[styles.testActionBtnText, { color: theme.text }]}>
+                      Task Due
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.testActionBtn, { borderColor: theme.borderSubtle }]}
+                    onPress={() => handleTriggerTest('streak')}>
+                    <Text style={styles.testActionBtnIcon}>🔥</Text>
+                    <Text style={[styles.testActionBtnText, { color: theme.text }]}>
+                      Streak Habit
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.testActionBtn, { borderColor: theme.borderSubtle }]}
+                    onPress={() => handleTriggerTest('exam')}>
+                    <Text style={styles.testActionBtnIcon}>🎯</Text>
+                    <Text style={[styles.testActionBtnText, { color: theme.text }]}>
+                      Exam Alert
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </>
+          )}
+        </Card>
+      </View>
+
+      {/* SECTION 4: Biometric Security & App Lock */}
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeaderRow}>
+          <ThemedText type="titleMedium" style={styles.sectionHeading}>
+            Biometric Security
+          </ThemedText>
+          <Badge
+            label={
+              !biometricCap?.hasHardware
+                ? 'No Sensor'
+                : !biometricCap?.isEnrolled
+                ? 'Not Enrolled'
+                : isBiometricEnabled
+                ? 'Locked 🔒'
+                : 'Sensor Ready'
+            }
+            variant={isBiometricEnabled ? 'success' : biometricCap?.hasHardware ? 'neutral' : 'warning'}
+            size="sm"
+          />
+        </View>
+
+        <Card variant="outlined" style={styles.securityCard}>
+          <View style={styles.notifHeaderRow}>
+            <View style={[styles.iconBadge, { backgroundColor: theme.badgeBrandBackground }]}>
+              <Text style={styles.sectionIcon}>👆</Text>
+            </View>
+            <View style={styles.headerTextGroup}>
+              <ThemedText type="titleMedium">
+                {biometricCap?.biometricLabel || 'Fingerprint Lock'}
+              </ThemedText>
+              <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                Require biometric authentication on app launch
+              </ThemedText>
+            </View>
+            <Switch
+              value={isBiometricEnabled}
+              onValueChange={handleToggleBiometricLock}
+              disabled={!biometricCap?.hasHardware || !biometricCap?.isEnrolled}
+              trackColor={{ false: theme.borderSubtle, true: theme.brandPrimary }}
+              thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
+            />
+          </View>
+
+          {biometricCap?.hasHardware && biometricCap?.isEnrolled && (
+            <>
+              <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+              <Button
+                title="Test Biometric Sensor"
+                variant="secondary"
+                size="sm"
+                fullWidth
+                onPress={handleTestBiometricSensor}
+              />
+            </>
+          )}
+        </Card>
+      </View>
+
+      {/* SECTION 5: Account Password & Active Sessions */}
       <View style={styles.sectionBlock}>
         <ThemedText type="titleMedium" style={styles.sectionHeading}>
           Session & Security
@@ -269,27 +860,38 @@ export default function SettingsScreen() {
 
         <Card variant="outlined" style={styles.securityCard}>
           <View style={styles.securityHeader}>
-            <View
-              style={[
-                styles.iconBadge,
-                { backgroundColor: theme.badgeBrandBackground },
-              ]}>
+            <View style={[styles.iconBadge, { backgroundColor: theme.badgeBrandBackground }]}>
+              <Text style={styles.sectionIcon}>🔑</Text>
+            </View>
+            <View style={styles.securityHeaderText}>
+              <ThemedText type="titleMedium">Account Password</ThemedText>
+              <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                Protected with bank-grade Argon2id hashing
+              </ThemedText>
+            </View>
+          </View>
+
+          <Button
+            title="Change Account Password"
+            variant="secondary"
+            size="md"
+            fullWidth
+            onPress={() => setChangePassModalVisible(true)}
+          />
+
+          <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+          <View style={styles.securityHeader}>
+            <View style={[styles.iconBadge, { backgroundColor: theme.badgeBrandBackground }]}>
               <Text style={styles.sectionIcon}>🛡️</Text>
             </View>
             <View style={styles.securityHeaderText}>
               <ThemedText type="titleMedium">Session Control</ThemedText>
               <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
-                Manage authentication and active tokens
+                Revoke refresh tokens across devices
               </ThemedText>
             </View>
           </View>
-
-          <ThemedText type="bodySmall" style={[styles.securityNotice, { color: theme.textSecondary }]}>
-            When signing out of all devices, all high-entropy refresh tokens will be immediately
-            revoked across your registered mobile and web clients.
-          </ThemedText>
-
-          <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
 
           <View style={styles.securityActions}>
             <Button
@@ -312,6 +914,63 @@ export default function SettingsScreen() {
               onPress={confirmLogoutAll}
             />
           </View>
+        </Card>
+      </View>
+
+      {/* SECTION 6: Data Sovereignty & GDPR Privacy Rights */}
+      <View style={styles.sectionBlock}>
+        <ThemedText type="titleMedium" style={styles.sectionHeading}>
+          Data Sovereignty & Privacy (GDPR)
+        </ThemedText>
+
+        <Card variant="outlined" style={styles.securityCard}>
+          {/* Data Portability (Export) */}
+          <View style={styles.securityHeader}>
+            <View style={[styles.iconBadge, { backgroundColor: theme.badgeBrandBackground }]}>
+              <Text style={styles.sectionIcon}>📦</Text>
+            </View>
+            <View style={styles.securityHeaderText}>
+              <ThemedText type="titleMedium">Right to Data Portability</ThemedText>
+              <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                Export an archive of all your subjects, notes, tasks, flashcards & exams
+              </ThemedText>
+            </View>
+          </View>
+
+          <Button
+            title="Export All Study Data"
+            variant="secondary"
+            size="md"
+            fullWidth
+            loading={isExportingData}
+            disabled={isExportingData}
+            onPress={handleExportAllData}
+          />
+
+          <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+          {/* Right to be Forgotten (Account Deletion) */}
+          <View style={styles.securityHeader}>
+            <View style={[styles.iconBadge, { backgroundColor: theme.badgeDangerBackground }]}>
+              <Text style={styles.sectionIcon}>⚠️</Text>
+            </View>
+            <View style={styles.securityHeaderText}>
+              <ThemedText type="titleMedium" style={{ color: theme.statusDanger }}>
+                Right to be Forgotten
+              </ThemedText>
+              <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                Permanently purge your account, study assets, and history
+              </ThemedText>
+            </View>
+          </View>
+
+          <Button
+            title="Delete Account & Wipe Data"
+            variant="danger"
+            size="md"
+            fullWidth
+            onPress={() => setDeleteModalVisible(true)}
+          />
         </Card>
       </View>
 
@@ -399,6 +1058,192 @@ export default function SettingsScreen() {
           </ThemedText>
         </Card>
       </View>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={changePassModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setChangePassModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalContentCard, { backgroundColor: theme.cardBackground }]}>
+            <View style={styles.modalHeaderRow}>
+              <ThemedText type="headlineMedium" style={{ fontWeight: '700' }}>
+                Change Password
+              </ThemedText>
+              <Pressable
+                onPress={() => setChangePassModalVisible(false)}
+                style={styles.modalCloseBtn}>
+                <Text style={{ fontSize: 18, color: theme.textSecondary }}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+              Enter your current password and choose a new secure password (minimum 8 characters).
+            </ThemedText>
+
+            <View style={styles.modalForm}>
+              {/* Current Password */}
+              <View style={styles.formGroup}>
+                <ThemedText type="bodySmall" style={styles.formLabel}>
+                  Current Password
+                </ThemedText>
+                <View style={[styles.inputRow, { borderColor: theme.borderSubtle, backgroundColor: theme.backgroundElement }]}>
+                  <TextInput
+                    style={[styles.modalTextInput, { color: theme.text }]}
+                    secureTextEntry={!showCurrentPass}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    placeholder="Enter current password"
+                    placeholderTextColor={theme.textTertiary}
+                    autoCapitalize="none"
+                  />
+                  <Pressable onPress={() => setShowCurrentPass(!showCurrentPass)} style={styles.eyeBtn}>
+                    <Text style={{ fontSize: 16 }}>{showCurrentPass ? '👁️' : '🙈'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* New Password */}
+              <View style={styles.formGroup}>
+                <ThemedText type="bodySmall" style={styles.formLabel}>
+                  New Password (min 8 chars)
+                </ThemedText>
+                <View style={[styles.inputRow, { borderColor: theme.borderSubtle, backgroundColor: theme.backgroundElement }]}>
+                  <TextInput
+                    style={[styles.modalTextInput, { color: theme.text }]}
+                    secureTextEntry={!showNewPass}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Enter new password"
+                    placeholderTextColor={theme.textTertiary}
+                    autoCapitalize="none"
+                  />
+                  <Pressable onPress={() => setShowNewPass(!showNewPass)} style={styles.eyeBtn}>
+                    <Text style={{ fontSize: 16 }}>{showNewPass ? '👁️' : '🙈'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Confirm New Password */}
+              <View style={styles.formGroup}>
+                <ThemedText type="bodySmall" style={styles.formLabel}>
+                  Confirm New Password
+                </ThemedText>
+                <View style={[styles.inputRow, { borderColor: theme.borderSubtle, backgroundColor: theme.backgroundElement }]}>
+                  <TextInput
+                    style={[styles.modalTextInput, { color: theme.text }]}
+                    secureTextEntry={!showNewPass}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Confirm new password"
+                    placeholderTextColor={theme.textTertiary}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.modalBtnColumn}>
+              <Button
+                title="Update Password"
+                variant="primary"
+                size="md"
+                fullWidth
+                loading={isChangingPass}
+                disabled={isChangingPass}
+                onPress={handleChangePasswordSubmit}
+              />
+              <Button
+                title="Cancel"
+                variant="secondary"
+                size="md"
+                fullWidth
+                onPress={() => setChangePassModalVisible(false)}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalContentCard, { backgroundColor: theme.cardBackground }]}>
+            <View style={styles.modalHeaderRow}>
+              <ThemedText type="headlineMedium" style={{ fontWeight: '700', color: theme.statusDanger }}>
+                Delete Account
+              </ThemedText>
+              <Pressable
+                onPress={() => setDeleteModalVisible(false)}
+                style={styles.modalCloseBtn}>
+                <Text style={{ fontSize: 18, color: theme.textSecondary }}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ThemedText type="bodySmall" style={{ color: theme.statusDanger }}>
+              ⚠️ Caution: This will permanently delete your student account, all courses, notes, timetable schedules, flashcard decks, and revision analytics.
+            </ThemedText>
+
+            <View style={styles.modalForm}>
+              <View style={styles.formGroup}>
+                <ThemedText type="bodySmall" style={styles.formLabel}>
+                  Confirm Password
+                </ThemedText>
+                <View style={[styles.inputRow, { borderColor: theme.borderSubtle, backgroundColor: theme.backgroundElement }]}>
+                  <TextInput
+                    style={[styles.modalTextInput, { color: theme.text }]}
+                    secureTextEntry
+                    value={deletePassword}
+                    onChangeText={setDeletePassword}
+                    placeholder="Enter your account password"
+                    placeholderTextColor={theme.textTertiary}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <ThemedText type="bodySmall" style={styles.formLabel}>
+                  Reason (Optional)
+                </ThemedText>
+                <View style={[styles.inputRow, { borderColor: theme.borderSubtle, backgroundColor: theme.backgroundElement }]}>
+                  <TextInput
+                    style={[styles.modalTextInput, { color: theme.text }]}
+                    value={deleteReason}
+                    onChangeText={setDeleteReason}
+                    placeholder="e.g. Graduated, finished semester"
+                    placeholderTextColor={theme.textTertiary}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.modalBtnColumn}>
+              <Button
+                title="Permanently Delete"
+                variant="danger"
+                size="md"
+                fullWidth
+                loading={isDeletingAccount}
+                disabled={isDeletingAccount}
+                onPress={handleDeleteAccountSubmit}
+              />
+              <Button
+                title="Keep Account"
+                variant="secondary"
+                size="md"
+                fullWidth
+                onPress={() => setDeleteModalVisible(false)}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenWrapper>
   );
 }
@@ -560,5 +1405,154 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     textAlign: 'center',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  notifCard: {
+    padding: Spacing.cardPadding,
+    gap: Spacing.md,
+  },
+  notifHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  headerTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  prefRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  prefTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  pillSelectorContainer: {
+    paddingLeft: Spacing.sm,
+    gap: 4,
+  },
+  timingPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  timingPill: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  timingPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  testCenterBox: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.xs,
+  },
+  testCenterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  testButtonsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  testActionBtn: {
+    flex: 1,
+    minWidth: '45%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    minHeight: MinTouchTarget,
+  },
+  testActionBtnIcon: {
+    fontSize: 16,
+  },
+  testActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  modalContentCard: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalCloseBtn: {
+    padding: Spacing.xs,
+    minWidth: MinTouchTarget,
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalForm: {
+    gap: Spacing.md,
+    marginVertical: Spacing.xs,
+  },
+  formGroup: {
+    gap: 6,
+  },
+  formLabel: {
+    fontWeight: '600',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    minHeight: MinTouchTarget,
+  },
+  modalTextInput: {
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: Spacing.sm,
+  },
+  eyeBtn: {
+    padding: Spacing.xs,
+  },
+  modalBtnColumn: {
+    width: '100%',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
 });

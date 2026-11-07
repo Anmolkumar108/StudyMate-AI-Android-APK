@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -13,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Badge, Button, Card } from '@/components/ui';
-import { BorderRadius, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { Subject } from '@/types/subject';
 
@@ -25,6 +26,14 @@ export interface SubjectDetailModalProps {
   onDelete: (subjectId: string) => Promise<void>;
 }
 
+function getSubjectInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
 export function SubjectDetailModal({
   subject,
   visible,
@@ -32,6 +41,7 @@ export function SubjectDetailModal({
   onEdit,
   onDelete,
 }: SubjectDetailModalProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
 
@@ -43,7 +53,8 @@ export function SubjectDetailModal({
     return null;
   }
 
-  const subjectColor = subject.color || theme.brandPrimary;
+  const subjectColor = subject.color || '#8B5CF6';
+  const initials = getSubjectInitials(subject.name);
 
   const executeDelete = async () => {
     setIsDeleting(true);
@@ -112,19 +123,24 @@ export function SubjectDetailModal({
           style={[
             styles.sheetContainer,
             {
-              backgroundColor: theme.background,
-              borderColor: theme.borderSubtle,
               paddingBottom: Math.max(insets.bottom, Spacing.md),
             },
           ]}>
           {/* Top Color Accent Strip */}
-          <View style={[styles.colorStrip, { backgroundColor: subjectColor }]} />
+          <View
+            style={[
+              styles.colorStrip,
+              { backgroundColor: subjectColor, shadowColor: subjectColor },
+            ]}
+          />
 
           {/* Modal Header */}
-          <View style={[styles.header, { borderBottomColor: theme.borderSubtle }]}>
+          <View style={styles.header}>
             <View style={styles.headerTitleContainer}>
               <View style={[styles.colorIndicator, { backgroundColor: subjectColor }]} />
-              <ThemedText type="smallBold" style={{ color: theme.brandPrimary, letterSpacing: 0.5 }}>
+              <ThemedText
+                type="smallBold"
+                style={{ color: '#C084FC', letterSpacing: 0.8 }}>
                 SUBJECT DETAILS
               </ThemedText>
             </View>
@@ -135,13 +151,9 @@ export function SubjectDetailModal({
               accessibilityLabel="Close subject details"
               style={({ pressed }) => [
                 styles.closeButton,
-                {
-                  backgroundColor: theme.cardBackground,
-                  borderColor: theme.borderSubtle,
-                  opacity: pressed ? 0.75 : 1,
-                },
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
               ]}>
-              <Text style={[styles.closeIcon, { color: theme.textSecondary }]}>✕</Text>
+              <Text style={styles.closeIcon}>✕</Text>
             </Pressable>
           </View>
 
@@ -158,10 +170,36 @@ export function SubjectDetailModal({
               </Card>
             ) : null}
 
-            {/* Subject Name */}
-            <ThemedText type="headlineLarge" style={styles.subjectName}>
-              {subject.name}
-            </ThemedText>
+            {/* Hero Card Banner */}
+            <View
+              style={[
+                styles.heroBanner,
+                {
+                  borderColor: `${subjectColor}44`,
+                  shadowColor: subjectColor,
+                },
+              ]}>
+              <View
+                style={[
+                  styles.heroAvatar,
+                  { backgroundColor: `${subjectColor}25`, borderColor: `${subjectColor}66` },
+                ]}>
+                <Text style={[styles.heroAvatarText, { color: subjectColor }]}>
+                  {initials}
+                </Text>
+              </View>
+
+              <View style={styles.heroTextGroup}>
+                <ThemedText type="headlineLarge" style={styles.subjectName}>
+                  {subject.name}
+                </ThemedText>
+                {subject.code ? (
+                  <Text style={[styles.heroCode, { color: subjectColor }]}>
+                    {subject.code}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
 
             {/* Metadata Badges (Code, Semester, Color) */}
             <View style={styles.tagRow}>
@@ -181,16 +219,53 @@ export function SubjectDetailModal({
               />
             </View>
 
+            {/* Quick Action Navigation Chips */}
+            <View style={styles.shortcutRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.shortcutCard,
+                  pressed && styles.shortcutCardPressed,
+                ]}
+                onPress={() => {
+                  onClose();
+                  router.push('/timetable' as never);
+                }}>
+                <Text style={styles.shortcutIcon}>📅</Text>
+                <View style={styles.shortcutTextGroup}>
+                  <Text style={styles.shortcutTitle}>Class Schedule</Text>
+                  <Text style={styles.shortcutSubtitle}>Check lectures & room</Text>
+                </View>
+                <Text style={styles.shortcutArrow}>→</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.shortcutCard,
+                  pressed && styles.shortcutCardPressed,
+                ]}
+                onPress={() => {
+                  onClose();
+                  router.push('/notes' as never);
+                }}>
+                <Text style={styles.shortcutIcon}>📝</Text>
+                <View style={styles.shortcutTextGroup}>
+                  <Text style={styles.shortcutTitle}>Course Notes</Text>
+                  <Text style={styles.shortcutSubtitle}>View & revise Cornell notes</Text>
+                </View>
+                <Text style={styles.shortcutArrow}>→</Text>
+              </Pressable>
+            </View>
+
             {/* Description & Syllabus Section */}
             <Card variant="default" style={styles.sectionCard}>
               <ThemedText
                 type="smallBold"
-                style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                style={[styles.sectionTitle, { color: '#C084FC' }]}>
                 DESCRIPTION & SYLLABUS
               </ThemedText>
               <ThemedText
                 type="bodyMedium"
-                style={[styles.descriptionText, { color: theme.text }]}>
+                style={[styles.descriptionText, { color: '#E2E8F0' }]}>
                 {subject.description || 'No description provided for this subject.'}
               </ThemedText>
             </Card>
@@ -199,23 +274,23 @@ export function SubjectDetailModal({
             <Card variant="default" style={styles.sectionCard}>
               <ThemedText
                 type="smallBold"
-                style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                style={[styles.sectionTitle, { color: '#C084FC' }]}>
                 ACADEMIC TIMELINE
               </ThemedText>
               <View style={styles.timelineRow}>
-                <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                <ThemedText type="bodySmall" style={{ color: '#94A3B8' }}>
                   Enrolled / Created
                 </ThemedText>
-                <ThemedText type="bodySmall" style={{ color: theme.text, fontWeight: '600' }}>
+                <ThemedText type="bodySmall" style={{ color: '#FFFFFF', fontWeight: '700' }}>
                   {createdDate}
                 </ThemedText>
               </View>
               {updatedDate && updatedDate !== createdDate ? (
                 <View style={styles.timelineRow}>
-                  <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+                  <ThemedText type="bodySmall" style={{ color: '#94A3B8' }}>
                     Last Modified
                   </ThemedText>
-                  <ThemedText type="bodySmall" style={{ color: theme.text, fontWeight: '600' }}>
+                  <ThemedText type="bodySmall" style={{ color: '#FFFFFF', fontWeight: '700' }}>
                     {updatedDate}
                   </ThemedText>
                 </View>
@@ -305,58 +380,66 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
   sheetContainer: {
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    borderTopWidth: 1,
-    maxHeight: '90%',
+    backgroundColor: '#0F1528',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    maxHeight: '92%',
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: '#8B5CF6',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 12,
   },
   colorStrip: {
-    height: 6,
+    height: 5,
     width: '100%',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.cardPadding,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: 8,
   },
   colorIndicator: {
     width: 10,
     height: 10,
-    borderRadius: BorderRadius.full,
+    borderRadius: 5,
   },
   closeButton: {
-    minWidth: MinTouchTarget,
-    minHeight: MinTouchTarget,
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.full,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeIcon: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
+    color: '#E2E8F0',
   },
   contentScroll: {
     flexGrow: 0,
@@ -368,21 +451,107 @@ const styles = StyleSheet.create({
   errorCard: {
     padding: Spacing.sm,
   },
+
+  // Hero Card
+  heroBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: 'rgba(16, 24, 48, 0.85)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  heroAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroAvatarText: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  heroTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
   subjectName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
     letterSpacing: -0.3,
   },
+  heroCode: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
   tagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: Spacing.xs,
   },
+
+  // Shortcuts
+  shortcutRow: {
+    gap: 10,
+  },
+  shortcutCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 12,
+    gap: 12,
+  },
+  shortcutCardPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    transform: [{ scale: 0.98 }],
+  },
+  shortcutIcon: {
+    fontSize: 20,
+  },
+  shortcutTextGroup: {
+    flex: 1,
+    gap: 1,
+  },
+  shortcutTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  shortcutSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  shortcutArrow: {
+    color: '#C084FC',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
   sectionCard: {
     padding: Spacing.cardPadding,
     gap: Spacing.xs,
+    backgroundColor: 'rgba(16, 24, 48, 0.75)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   sectionTitle: {
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   descriptionText: {
     lineHeight: 22,
@@ -391,11 +560,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   confirmBox: {
     padding: Spacing.cardPadding,
     gap: Spacing.xs,
+    borderRadius: 16,
   },
   confirmButtonRow: {
     flexDirection: 'row',

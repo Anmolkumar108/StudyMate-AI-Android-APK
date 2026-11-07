@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Input } from '@/components/ui';
-import { BorderRadius, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   SUBJECT_COLOR_PRESETS,
@@ -53,7 +53,7 @@ function SubjectFormContent({
   const [semester, setSemester] = useState(
     initialSubject?.semester ? String(initialSubject.semester) : ''
   );
-  const [color, setColor] = useState(initialSubject?.color || '#4F46E5');
+  const [color, setColor] = useState(initialSubject?.color || '#8B5CF6');
 
   const [fieldErrors, setFieldErrors] = useState<{
     name?: string;
@@ -63,6 +63,16 @@ function SubjectFormContent({
   }>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Compute initials for live preview
+  const previewInitials = React.useMemo(() => {
+    if (!name.trim()) return 'CS';
+    const words = name.trim().split(/\s+/);
+    if (words.length >= 2 && words[0] && words[1]) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }, [name]);
 
   const handleSubmit = async () => {
     setServerError(null);
@@ -105,7 +115,7 @@ function SubjectFormContent({
   const title = mode === 'create' ? 'Add Subject' : 'Edit Subject';
   const subtitle =
     mode === 'create'
-      ? 'Create a new course to organize notes and exams.'
+      ? 'Create a new course to organize notes, syllabus & schedule.'
       : 'Update details for this academic subject.';
 
   return (
@@ -123,21 +133,25 @@ function SubjectFormContent({
         style={[
           styles.sheetContainer,
           {
-            backgroundColor: theme.background,
-            borderColor: theme.borderSubtle,
             paddingBottom: Math.max(insets.bottom, Spacing.md),
           },
         ]}>
         {/* Color Accent Indicator Strip */}
-        <View style={[styles.colorStrip, { backgroundColor: color }]} />
+        <View style={[styles.colorStrip, { backgroundColor: color, shadowColor: color }]} />
 
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.borderSubtle }]}>
+        <View style={styles.header}>
           <View style={styles.headerTextGroup}>
+            <View style={styles.headerPillRow}>
+              <View style={[styles.headerDot, { backgroundColor: color }]} />
+              <ThemedText type="smallBold" style={{ color: '#C084FC', letterSpacing: 0.8 }}>
+                {mode === 'create' ? 'NEW COURSE' : 'COURSE SETTINGS'}
+              </ThemedText>
+            </View>
             <ThemedText type="headlineMedium" style={styles.headerTitle}>
               {title}
             </ThemedText>
-            <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+            <ThemedText type="bodySmall" style={styles.headerSubtitle}>
               {subtitle}
             </ThemedText>
           </View>
@@ -148,13 +162,9 @@ function SubjectFormContent({
             accessibilityLabel="Close form"
             style={({ pressed }) => [
               styles.closeButton,
-              {
-                backgroundColor: theme.cardBackground,
-                borderColor: theme.borderSubtle,
-                opacity: pressed ? 0.75 : 1,
-              },
+              pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
             ]}>
-            <Text style={[styles.closeIcon, { color: theme.textSecondary }]}>✕</Text>
+            <Text style={styles.closeIcon}>✕</Text>
           </Pressable>
         </View>
 
@@ -173,6 +183,66 @@ function SubjectFormContent({
               </ThemedText>
             </Card>
           ) : null}
+
+          {/* ========================================================================= */}
+          {/* LIVE SUBJECT CARD PREVIEW                                                */}
+          {/* ========================================================================= */}
+          <View style={styles.previewContainer}>
+            <View style={styles.previewLabelRow}>
+              <Text style={styles.previewSparkle}>✨</Text>
+              <Text style={styles.previewLabel}>LIVE CARD PREVIEW</Text>
+            </View>
+            <View
+              style={[
+                styles.previewCard,
+                {
+                  borderColor: `${color}55`,
+                  shadowColor: color,
+                },
+              ]}>
+              <View style={[styles.previewBar, { backgroundColor: color }]} />
+              <View style={styles.previewInner}>
+                <View style={styles.previewTopRow}>
+                  <View style={styles.previewAvatarGroup}>
+                    <View
+                      style={[
+                        styles.previewAvatar,
+                        { backgroundColor: `${color}25`, borderColor: `${color}60` },
+                      ]}>
+                      <Text style={[styles.previewAvatarText, { color }]}>
+                        {previewInitials}
+                      </Text>
+                    </View>
+                    <View style={styles.previewBadges}>
+                      {code.trim() ? (
+                        <View style={styles.previewMiniBadge}>
+                          <Text style={styles.previewMiniBadgeText}>
+                            {code.trim().toUpperCase()}
+                          </Text>
+                        </View>
+                      ) : null}
+                      {semester.trim() ? (
+                        <View style={styles.previewMiniBadge}>
+                          <Text style={styles.previewMiniBadgeText}>
+                            Sem {semester.trim()}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={[styles.previewDot, { backgroundColor: color }]} />
+                </View>
+
+                <Text style={styles.previewTitle} numberOfLines={1}>
+                  {name.trim() || 'Your Subject Name'}
+                </Text>
+
+                <Text style={styles.previewDesc} numberOfLines={1}>
+                  {description.trim() || 'Course syllabus, lecture room & notes summary...'}
+                </Text>
+              </View>
+            </View>
+          </View>
 
           {/* Subject Name Input */}
           <Input
@@ -228,12 +298,19 @@ function SubjectFormContent({
 
           {/* Color Swatch Selector */}
           <View style={styles.colorGroup}>
-            <ThemedText type="titleMedium" style={styles.colorLabel}>
-              Color Theme
+            <View style={styles.colorLabelRow}>
+              <ThemedText type="titleMedium" style={styles.colorLabel}>
+                Color Theme & Accent
+              </ThemedText>
+              <View style={[styles.activeColorPill, { backgroundColor: `${color}25`, borderColor: `${color}60` }]}>
+                <View style={[styles.activeColorDot, { backgroundColor: color }]} />
+                <Text style={[styles.activeColorText, { color }]}>Selected</Text>
+              </View>
+            </View>
+            <ThemedText type="bodySmall" style={styles.colorHelper}>
+              Pick an energetic neon hue to highlight this course and related timetable cards.
             </ThemedText>
-            <ThemedText type="bodySmall" style={{ color: theme.textSecondary, marginBottom: Spacing.xs }}>
-              Choose a color tag to organize this course and related notes.
-            </ThemedText>
+
             <View style={styles.colorPalette}>
               {SUBJECT_COLOR_PRESETS.map((preset) => {
                 const isSelected = color === preset.hex;
@@ -249,7 +326,7 @@ function SubjectFormContent({
                       styles.colorSwatch,
                       {
                         backgroundColor: preset.hex,
-                        borderColor: isSelected ? theme.text : 'transparent',
+                        shadowColor: preset.hex,
                         opacity: pressed ? 0.8 : 1,
                       },
                       isSelected && styles.colorSwatchSelected,
@@ -343,56 +420,81 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
   sheetContainer: {
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    borderTopWidth: 1,
+    backgroundColor: '#0F1528',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
     maxHeight: '92%',
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: '#8B5CF6',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 12,
   },
   colorStrip: {
-    height: 6,
+    height: 5,
     width: '100%',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.cardPadding,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerTextGroup: {
     flex: 1,
-    gap: 2,
+    gap: 3,
     marginRight: Spacing.sm,
   },
+  headerPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   headerTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#FFFFFF',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
   },
   closeButton: {
-    minWidth: MinTouchTarget,
-    minHeight: MinTouchTarget,
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.full,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeIcon: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
+    color: '#E2E8F0',
   },
   formScroll: {
     flexGrow: 0,
@@ -404,29 +506,158 @@ const styles = StyleSheet.create({
   errorCard: {
     padding: Spacing.sm,
   },
+
+  // Live Preview
+  previewContainer: {
+    gap: 8,
+  },
+  previewLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  previewSparkle: {
+    fontSize: 12,
+  },
+  previewLabel: {
+    color: '#A78BFA',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  previewCard: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(16, 24, 48, 0.85)',
+    borderRadius: 16,
+    borderWidth: 1.2,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  previewBar: {
+    width: 5,
+    alignSelf: 'stretch',
+  },
+  previewInner: {
+    flex: 1,
+    padding: 12,
+    gap: 4,
+  },
+  previewTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewAvatarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewAvatarText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  previewBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  previewMiniBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  previewMiniBadgeText: {
+    color: '#E2E8F0',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  previewDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  previewTitle: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  previewDesc: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+
+  // Color Swatch
   colorGroup: {
-    gap: 2,
+    gap: 4,
+  },
+  colorLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   colorLabel: {
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#F1F5F9',
+  },
+  activeColorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  activeColorDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  activeColorText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  colorHelper: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginBottom: 4,
   },
   colorPalette: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginTop: 2,
+    gap: 12,
+    marginTop: 4,
   },
   colorSwatch: {
-    width: 38,
-    height: 38,
-    borderRadius: BorderRadius.full,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 3,
   },
   colorSwatchSelected: {
     borderWidth: 3,
-    transform: [{ scale: 1.08 }],
+    borderColor: '#FFFFFF',
+    transform: [{ scale: 1.12 }],
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 6,
   },
   colorCheckmark: {
     width: 10,

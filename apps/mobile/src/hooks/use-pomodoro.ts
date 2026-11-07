@@ -454,19 +454,23 @@ export function usePomodoro() {
   );
 
   const updateSettings = useCallback(
-    async (newSettings: PomodoroSettings) => {
-      const validation = validatePomodoroSettings(newSettings);
+    async (newSettings: Partial<PomodoroSettings>) => {
+      const merged: PomodoroSettings = {
+        ...settingsRef.current,
+        ...newSettings,
+      };
+      const validation = validatePomodoroSettings(merged);
       if (!validation.isValid) {
         throw new Error(Object.values(validation.errors)[0] || 'Invalid settings');
       }
 
-      setSettings(newSettings);
-      settingsRef.current = newSettings;
-      await savePomodoroSettings(newSettings);
+      setSettings(merged);
+      settingsRef.current = merged;
+      await savePomodoroSettings(merged);
 
       // If timer is idle or completed, adjust current duration immediately
       if (statusRef.current === 'idle' || statusRef.current === 'completed') {
-        const newDuration = getDurationSecondsForMode(modeRef.current, newSettings);
+        const newDuration = getDurationSecondsForMode(modeRef.current, merged);
         setRemainingSeconds(newDuration);
         setTargetDurationSeconds(newDuration);
 
@@ -475,12 +479,12 @@ export function usePomodoro() {
             remainingSeconds: newDuration,
             targetDurationSeconds: newDuration,
           },
-          newSettings
+          merged
         );
       } else {
         // If timer is running or paused, DO NOT reset the active timer
         // Just persist the settings safely for subsequent sessions
-        await persistState({}, newSettings);
+        await persistState({}, merged);
       }
     },
     [persistState]
@@ -492,6 +496,39 @@ export function usePomodoro() {
     setStatus('idle');
     persistState({ status: 'idle' });
   }, [persistState]);
+
+  const adjustTime = useCallback(
+    (deltaSeconds: number) => {
+      if (status === 'completed') return;
+      const newRemaining = Math.max(60, remainingSeconds + deltaSeconds);
+      const newTarget = Math.max(newRemaining, targetDurationSeconds + (deltaSeconds > 0 ? deltaSeconds : 0));
+      setRemainingSeconds(newRemaining);
+      setTargetDurationSeconds(newTarget);
+      if (status === 'running' && deadlineTimestamp) {
+        setDeadlineTimestamp(deadlineTimestamp + deltaSeconds * 1000);
+      }
+      persistState({
+        remainingSeconds: newRemaining,
+        targetDurationSeconds: newTarget,
+        deadlineTimestamp:
+          status === 'running' && deadlineTimestamp
+            ? deadlineTimestamp + deltaSeconds * 1000
+            : null,
+      });
+    },
+    [status, remainingSeconds, targetDurationSeconds, deadlineTimestamp, persistState]
+  );
+
+  const setCustomFocusDuration = useCallback(
+    async (minutes: number) => {
+      const clamped = Math.max(1, Math.min(90, Math.round(minutes)));
+      await updateSettings({ focusDuration: clamped });
+      if (mode !== 'focus') {
+        switchMode('focus');
+      }
+    },
+    [mode, updateSettings, switchMode]
+  );
 
   // Derived progress (0 to 1)
   const progress = useMemo(() => {
@@ -519,5 +556,7 @@ export function usePomodoro() {
     switchMode,
     updateSettings,
     dismissCompletion,
+    adjustTime,
+    setCustomFocusDuration,
   };
 }

@@ -120,7 +120,7 @@ describe('Subjects API Client', () => {
 
     const created = await subjectApi.create(payload);
     assert.strictEqual(capturedMethod, 'POST');
-    assert.ok(capturedBody?.includes('Algorithms'));
+    assert.ok(String(capturedBody).includes('Algorithms'));
     assert.strictEqual(created.id, 'new-id');
     assert.strictEqual(created.name, 'Algorithms');
   });
@@ -179,7 +179,7 @@ describe('Subjects API Client', () => {
 
     const updated = await subjectApi.update('sub-123', updatePayload);
     assert.strictEqual(capturedMethod, 'PATCH');
-    assert.ok(capturedBody?.includes('Advanced Physics'));
+    assert.ok(String(capturedBody).includes('Advanced Physics'));
     assert.strictEqual(updated.name, 'Advanced Physics');
     assert.strictEqual(updated.semester, 2);
   });

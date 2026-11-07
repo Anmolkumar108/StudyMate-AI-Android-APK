@@ -14,11 +14,10 @@ import {
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Badge, Button, Card, ScreenWrapper } from '@/components/ui';
+import { Badge, ScreenWrapper } from '@/components/ui';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { aiApi, noteApi } from '@/services/api/client';
-import { AIChatMessage } from '@/types/ai';
 
 interface DisplayMessage {
   id: string;

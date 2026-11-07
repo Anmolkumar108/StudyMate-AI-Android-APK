@@ -23,6 +23,7 @@ import {
   formatTimeRemaining,
   PomodoroPersistedData,
   PomodoroSettings,
+  PomodoroStatus,
   validatePomodoroSettings,
 } from '../src/types/pomodoro';
 
@@ -210,7 +211,7 @@ describe('Pomodoro Focus Timer Domain & State Machine', () => {
       // Running timer state with 800 seconds left out of 1500
       let remainingSeconds = 800;
       let targetDurationSeconds = 1500;
-      const status: 'running' = 'running';
+      let status: PomodoroStatus = 'running';
 
       // User changes settings to 45 min focus (2700s)
       const newSettings: PomodoroSettings = {
@@ -219,7 +220,7 @@ describe('Pomodoro Focus Timer Domain & State Machine', () => {
       };
 
       // Simulating updateSettings branch: if running/paused, do not overwrite remainingSeconds
-      if (status === 'idle') {
+      if ((status as string) === 'idle') {
         remainingSeconds = newSettings.focusDuration * 60;
         targetDurationSeconds = newSettings.focusDuration * 60;
       }

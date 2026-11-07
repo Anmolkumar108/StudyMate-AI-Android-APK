@@ -2,36 +2,37 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
+  ScrollView,
   StyleSheet,
+  Text,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 
 export default function PendingVerificationScreen() {
   const router = useRouter();
-  const { user, refreshProfile, logout, status } = useAuth();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+  const { user, refreshProfile, resendVerification, logout, status } = useAuth();
 
   const [isChecking, setIsChecking] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
 
   const handleCheckStatus = async () => {
     setIsChecking(true);
     setFeedback(null);
+    setResendSuccess(null);
     try {
       await refreshProfile();
       if (status === 'authenticated') {
         router.replace('/');
       } else {
-        setFeedback('Verification is still pending. Please check your inbox and verify your email.');
+        setFeedback('Verification is still pending. Please click the link in your email and tap this button again.');
       }
     } catch {
       setFeedback('Unable to check verification status right now. Please try again.');
@@ -40,43 +41,74 @@ export default function PendingVerificationScreen() {
     }
   };
 
+  const handleResend = async () => {
+    if (!user?.email) return;
+    setIsResending(true);
+    setFeedback(null);
+    setResendSuccess(null);
+    try {
+      await resendVerification(user.email);
+      setResendSuccess('A new verification email has been sent! Please check your inbox.');
+    } catch (err) {
+      setFeedback((err as Error).message || 'Failed to resend verification email.');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
-    router.replace('/(auth)/login');
+    router.replace('/login' as never);
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <View style={styles.container}>
-        <ThemedView style={styles.card}>
-          <ThemedText type="headlineMedium" style={styles.title}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.mascotWrapper}>
+          <Image
+            source={require('../../../assets/images/auth-robot-signup.png')}
+            style={styles.mascotImage}
+            resizeMode="contain"
+          />
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.iconCircle}>
+            <Text style={styles.iconEmoji}>✉️</Text>
+          </View>
+
+          <ThemedText type="headlineMedium" style={styles.cardTitle}>
             Verification Pending
           </ThemedText>
-          <ThemedText type="bodyMedium" style={{ textAlign: 'center', color: colors.textSecondary }}>
-            We sent a verification confirmation to{' '}
-            <ThemedText type="code">{user?.email || 'your email'}</ThemedText>.
-          </ThemedText>
-          <ThemedText type="bodySmall" style={{ textAlign: 'center', color: colors.textSecondary }}>
-            Please confirm your email address to unlock your full StudyMate AI dashboard.
-          </ThemedText>
+
+          <Text style={styles.cardSubtitle}>
+            We sent an email verification confirmation to:
+          </Text>
+
+          <View style={styles.emailPill}>
+            <Text style={styles.emailText}>{user?.email || 'your email'}</Text>
+          </View>
+
+          <Text style={styles.instructionsText}>
+            Please confirm your email address to unlock your full StudyMate AI dashboard and academic tools.
+          </Text>
 
           {feedback && (
-            <View
-              style={[
-                styles.feedbackBanner,
-                { backgroundColor: colorScheme === 'dark' ? '#1E293B' : '#F1F5F9' },
-              ]}>
-              <ThemedText type="small" style={{ color: colors.textSecondary, textAlign: 'center' }}>
-                {feedback}
-              </ThemedText>
+            <View style={styles.feedbackBanner}>
+              <Text style={styles.feedbackText}>{feedback}</Text>
             </View>
           )}
 
+          {resendSuccess && (
+            <View style={styles.successBanner}>
+              <Text style={styles.successIcon}>✓</Text>
+              <Text style={styles.successText}>{resendSuccess}</Text>
+            </View>
+          )}
+
+          {/* Primary Action: I Have Verified */}
           <Pressable
-            style={[
-              styles.primaryButton,
-              { backgroundColor: colors.brandPrimary, opacity: isChecking ? 0.8 : 1 },
-            ]}
+            style={[styles.primaryButton, isChecking && styles.buttonDisabled]}
             onPress={handleCheckStatus}
             disabled={isChecking}
             accessibilityRole="button"
@@ -84,23 +116,48 @@ export default function PendingVerificationScreen() {
             {isChecking ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <ThemedText type="titleMedium" style={styles.primaryButtonText}>
-                I have verified my email
-              </ThemedText>
+              <Text style={styles.primaryButtonText}>I have verified my email</Text>
             )}
           </Pressable>
 
+          {/* Enter Code Option */}
           <Pressable
-            style={[styles.secondaryButton, { borderColor: colors.borderSubtle }]}
+            style={styles.codeButton}
+            onPress={() =>
+              router.push({
+                pathname: '/verify-email' as never,
+                params: { email: user?.email },
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Enter verification code">
+            <Text style={styles.codeButtonText}>Enter verification code manually  →</Text>
+          </Pressable>
+
+          {/* Resend Email Button */}
+          <Pressable
+            style={styles.resendButton}
+            onPress={handleResend}
+            disabled={isResending}
+            accessibilityRole="button"
+            accessibilityLabel="Resend email">
+            {isResending ? (
+              <ActivityIndicator size="small" color="#A855F7" />
+            ) : (
+              <Text style={styles.resendButtonText}>Resend verification email</Text>
+            )}
+          </Pressable>
+
+          {/* Switch Account */}
+          <Pressable
+            style={styles.logoutButton}
             onPress={handleLogout}
             accessibilityRole="button"
-            accessibilityLabel="Switch account or sign in again">
-            <ThemedText type="bodyMedium" style={{ color: colors.textSecondary }}>
-              Sign in with another account
-            </ThemedText>
+            accessibilityLabel="Sign in with another account">
+            <Text style={styles.logoutButtonText}>Sign in with another account</Text>
           </Pressable>
-        </ThemedView>
-      </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -108,48 +165,173 @@ export default function PendingVerificationScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    backgroundColor: '#070514',
   },
-  container: {
-    flex: 1,
-    padding: 24,
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
     justifyContent: 'center',
+    paddingVertical: 30,
+  },
+  mascotWrapper: {
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  mascotImage: {
+    width: 140,
+    height: 140,
+    borderRadius: 28,
   },
   card: {
-    width: '100%',
+    backgroundColor: 'rgba(20, 15, 45, 0.85)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
     padding: 24,
-    borderRadius: 16,
-    alignItems: 'center',
-    gap: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
+    elevation: 8,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(124, 58, 237, 0.3)',
+    borderWidth: 1,
+    borderColor: '#A855F7',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  iconEmoji: {
+    fontSize: 26,
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  cardSubtitle: {
+    textAlign: 'center',
+    color: '#94A3B8',
+    fontSize: 13,
+  },
+  emailPill: {
+    backgroundColor: 'rgba(13, 10, 30, 0.85)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignSelf: 'center',
+    marginVertical: 12,
+  },
+  emailText: {
+    color: '#C084FC',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  instructionsText: {
+    color: '#94A3B8',
+    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 18,
   },
   feedbackBanner: {
-    borderRadius: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.4)',
+    borderRadius: 12,
     padding: 12,
-    width: '100%',
+    marginBottom: 16,
+  },
+  feedbackText: {
+    color: '#93C5FD',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(6, 78, 59, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.5)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  successIcon: {
+    color: '#34D399',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  successText: {
+    color: '#6EE7B7',
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
   },
   primaryButton: {
     height: 52,
-    width: '100%',
-    borderRadius: 12,
-    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: '#7C3AED',
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 6,
+    marginBottom: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.65,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontWeight: '600',
     fontSize: 16,
+    fontWeight: '700',
   },
-  secondaryButton: {
+  codeButton: {
     height: 48,
-    width: '100%',
-    borderRadius: 12,
-    borderWidth: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  codeButtonText: {
+    color: '#818CF8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  resendButton: {
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  resendButtonText: {
+    color: '#C084FC',
+    fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  logoutButton: {
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.15)',
+    paddingTop: 12,
+  },
+  logoutButtonText: {
+    color: '#94A3B8',
+    fontSize: 13,
   },
 });

@@ -186,5 +186,23 @@ describe('Navigation Routes & Study Hub Integrity', () => {
       settingsContent.includes('router.back()'),
       'Settings must support router.back() navigation'
     );
+
+    // Option 4: Biometric Security, Change Password, and GDPR
+    assert.ok(
+      settingsContent.includes('Biometric Security'),
+      'Settings must include Biometric Security section'
+    );
+    assert.ok(
+      settingsContent.includes('Change Account Password'),
+      'Settings must include Change Account Password button'
+    );
+    assert.ok(
+      settingsContent.includes('Right to Data Portability'),
+      'Settings must include GDPR Data Portability section'
+    );
+    assert.ok(
+      settingsContent.includes('Right to be Forgotten'),
+      'Settings must include GDPR Right to be Forgotten section'
+    );
   });
 });

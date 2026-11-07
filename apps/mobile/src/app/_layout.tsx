@@ -1,19 +1,63 @@
 import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AppState, AppStateStatus, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { BiometricLockOverlay } from '@/components/biometric-lock-overlay';
+import BottomNav from '@/components/bottom-nav';
 import { AuthProvider, useAuth } from '@/context/auth-context';
+import { isBiometricLockEnabled } from '@/services/biometrics';
+import {
+  registerForPushNotificationsAsync,
+  setupNotificationResponseListener,
+} from '@/services/notifications';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayoutNav() {
-  const { status } = useAuth();
+  const { status, logout } = useAuth();
   const segments = useSegments() as string[];
   const router = useRouter();
   const colorScheme = useColorScheme();
+  const [isLocked, setIsLocked] = useState(false);
+
+  // Check biometric lock on initial authentication and app foregrounding
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkLockStatus = async () => {
+      if (status === 'authenticated') {
+        const enabled = await isBiometricLockEnabled();
+        if (enabled && isMounted) {
+          setIsLocked(true);
+        }
+      } else {
+        if (isMounted) {
+          setIsLocked(false);
+        }
+      }
+    };
+
+    checkLockStatus();
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && status === 'authenticated') {
+        isBiometricLockEnabled().then((enabled) => {
+          if (enabled && isMounted) {
+            setIsLocked(true);
+          }
+        });
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      isMounted = false;
+      sub.remove();
+    };
+  }, [status]);
 
   useEffect(() => {
     if (status === 'initializing') {
@@ -37,24 +81,70 @@ function RootLayoutNav() {
     }
   }, [status, segments, router]);
 
+  // Initialize Android push notification channels and listen for taps
+  useEffect(() => {
+    registerForPushNotificationsAsync().catch(() => {});
+    const unsubscribe = setupNotificationResponseListener((route) => {
+      try {
+        router.push(route as never);
+      } catch {
+        // Fallback
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [router]);
+
   if (status === 'initializing') {
     return null;
   }
 
-  const isAuthRoute = (segments[0] as string | undefined) === '(auth)';
-  const isStandaloneRoute =
-    (segments[0] as string | undefined) === 'settings' ||
-    (segments[0] as string | undefined) === 'pomodoro' ||
-    (segments[0] as string | undefined) === 'flashcards' ||
-    (segments[0] as string | undefined) === 'ai-chat' ||
-    (segments[0] as string | undefined) === 'documents' ||
-    (segments[0] as string | undefined) === 'quizzes' ||
-    (segments[0] as string | undefined) === 'tasks';
+  const firstSegment = segments[0] as string | undefined;
+  const isAuthRoute = firstSegment === '(auth)';
+
+  // Main navigation tabs: Home, StudyHub, Tasks, Profile
+  const MAIN_TABS = new Set(['', 'index', 'explore', 'tasks', 'profile']);
+
+  // Standalone routes without bottom navigation bar
+  const STANDALONE_ROUTES = new Set([
+    'timetable',
+    'quizzes',
+    'documents',
+    'ai-chat',
+    'flashcards',
+    'pomodoro',
+    'settings',
+    'subjects',
+    'notes',
+    'exams',
+    'study-planner',
+    'analytics',
+    'search',
+  ]);
+
+  const currentRoute = firstSegment || 'index';
+  const isStandaloneRoute = Boolean(firstSegment) && STANDALONE_ROUTES.has(firstSegment as string);
+  const showBottomNav = !isAuthRoute && !isStandaloneRoute && MAIN_TABS.has(currentRoute);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      {isAuthRoute || isStandaloneRoute ? <Slot /> : <AppTabs />}
+      <View style={{ flex: 1, backgroundColor: '#080B16' }}>
+        <Slot />
+        {showBottomNav && <BottomNav activeTab={currentRoute} />}
+      </View>
+      {status === 'authenticated' && (
+        <BiometricLockOverlay
+          visible={isLocked}
+          onUnlocked={() => setIsLocked(false)}
+          onLogout={async () => {
+            setIsLocked(false);
+            await logout();
+            router.replace('/(auth)/login');
+          }}
+        />
+      )}
     </ThemeProvider>
   );
 }
