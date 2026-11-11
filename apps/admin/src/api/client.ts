@@ -44,6 +44,14 @@ export const authStorage = {
   setUser: (user: AdminUser): void => localStorage.setItem(USER_KEY, JSON.stringify(user)),
 };
 
+const BASE_URL = (
+  import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== ''
+    ? import.meta.env.VITE_API_URL
+    : import.meta.env.PROD
+    ? 'https://studymate-backend-api.onrender.com'
+    : ''
+).replace(/\/+$/, '');
+
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = authStorage.getToken();
   const headers: Record<string, string> = {
@@ -55,7 +63,9 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`/api/v1${endpoint}`, {
+  const targetUrl = endpoint.startsWith('http') ? endpoint : `${BASE_URL}/api/v1${endpoint}`;
+
+  const res = await fetch(targetUrl, {
     ...options,
     headers,
   });
