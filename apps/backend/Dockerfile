@@ -7,7 +7,8 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PORT=8000 \
+    PYTHONPATH=/app
 
 # Install minimal runtime utilities (curl for healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,17 +19,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code and migration graph
+# Copy application code, migrations and runners
 COPY pyproject.toml alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
-COPY start.sh ./start.sh
-
-# Fix line endings and make script executable
-RUN sed -i 's/\r$//' ./start.sh && chmod +x ./start.sh
+COPY seed_admin.py run_prod.py ./
 
 # Create non-root system user for container security
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser \
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appuser \
     && mkdir -p /app/uploads/documents \
     && chown -R appuser:appgroup /app
 
@@ -36,7 +34,7 @@ USER appuser
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1
 
-CMD ["./start.sh"]
+CMD ["python", "run_prod.py"]

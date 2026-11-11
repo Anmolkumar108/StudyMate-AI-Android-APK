@@ -19,12 +19,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Overwrite sqlalchemy.url with dynamic setting from app config if not explicitly overridden
-existing_url = config.get_main_option("sqlalchemy.url")
-if not existing_url or "studymate_app:password@localhost:5432" in existing_url:
-    config.set_main_option(
-        "sqlalchemy.url", settings.async_database_url.replace("%", "%%")
-    )
+# Overwrite sqlalchemy.url with dynamic setting from app config
+config.set_main_option(
+    "sqlalchemy.url", settings.async_database_url.replace("%", "%%")
+)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
