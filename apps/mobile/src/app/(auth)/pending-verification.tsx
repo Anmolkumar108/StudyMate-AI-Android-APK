@@ -66,7 +66,7 @@ export default function PendingVerificationScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.mascotWrapper}>
           <Image
-            source={require('../../../assets/images/auth-robot-signup.png')}
+            source={require('../../../assets/images/auth-robot-signup.jpg')}
             style={styles.mascotImage}
             resizeMode="contain"
           />

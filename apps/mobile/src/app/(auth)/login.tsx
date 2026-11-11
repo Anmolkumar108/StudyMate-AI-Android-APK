@@ -134,7 +134,7 @@ export default function LoginScreen() {
           {/* Top Mascot Hero Illustration */}
           <View style={styles.mascotWrapper}>
             <Image
-              source={require('../../../assets/images/auth-robot-login.png')}
+              source={require('../../../assets/images/auth-robot-login.jpg')}
               style={styles.mascotImage}
               resizeMode="cover"
             />

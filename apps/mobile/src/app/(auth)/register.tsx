@@ -160,7 +160,7 @@ export default function RegisterScreen() {
           {/* Top Mascot Hero Illustration */}
           <View style={styles.mascotWrapper}>
             <Image
-              source={require('../../../assets/images/auth-robot-signup.png')}
+              source={require('../../../assets/images/auth-robot-signup.jpg')}
               style={styles.mascotImage}
               resizeMode="cover"
             />
