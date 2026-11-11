@@ -1560,6 +1560,13 @@ class AdminService:
         if not row:
             return False
 
+        # Invalidate current access tokens by incrementing token_version
+        target_uid = row[0]
+        await self.session.execute(
+            update(User)
+            .where(User.id == target_uid)
+            .values(token_version=User.token_version + 1)
+        )
         await self.session.commit()
         await self.audit_log_repo.log(
             action="admin_revoked_device_session",
