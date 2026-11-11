@@ -147,6 +147,11 @@ export function isLocalDevHost(url: string): boolean {
 }
 
 export function resolveDefaultBaseUrl(): string {
+  // In release / production standalone APK (outside of dev mode), default to live cloud API
+  if (typeof __DEV__ !== 'undefined' && !__DEV__) {
+    return 'https://studymate-backend-api.onrender.com';
+  }
+
   // 1. Android Emulator: always connects to the host machine through 10.0.2.2
   if (isAndroidEmulator()) {
     return `http://10.0.2.2:${DEFAULT_PORT}`;
