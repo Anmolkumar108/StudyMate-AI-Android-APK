@@ -4,9 +4,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!privacy\\.html|assets/).*)",
       "destination": "/index.html"
     }
   ]
 }
-
