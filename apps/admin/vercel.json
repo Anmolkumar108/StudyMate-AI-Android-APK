@@ -4,7 +4,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!privacy\\.html|assets/).*)",
+      "source": "/((?!download|privacy|assets/).*)",
       "destination": "/index.html"
     }
   ]

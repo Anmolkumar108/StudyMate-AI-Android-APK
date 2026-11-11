@@ -1,2 +1,5 @@
-/privacy.html    /privacy.html   200
-/*               /index.html     200
+/download.html   /download.html   200
+/download        /download.html   200
+/privacy.html    /privacy.html    200
+/privacy         /privacy.html    200
+/*               /index.html      200

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Download StudyMate AI for Android</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #131b2e;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #8b5cf6;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #1e293b;
+      --success: #10b981;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: radial-gradient(circle at top, #1e1b4b 0%, #0b0f19 70%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      max-width: 480px;
+      width: 100%;
+      padding: 36px 28px;
+      text-align: center;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+    }
+    .logo-badge {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4);
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .tagline {
+      color: var(--text-muted);
+      font-size: 15px;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .meta-pills {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .pill {
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      color: #a5b4fc;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 999px;
+    }
+    .pill-green {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.25);
+      color: #6ee7b7;
+    }
+    .btn-download {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #fff;
+      text-decoration: none;
+      font-size: 17px;
+      font-weight: 700;
+      padding: 16px 24px;
+      border-radius: 16px;
+      transition: all 0.2s ease;
+      box-shadow: 0 10px 25px rgba(99, 102, 241, 0.35);
+      margin-bottom: 24px;
+    }
+    .btn-download:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(99, 102, 241, 0.5);
+    }
+    .btn-download svg {
+      width: 22px;
+      height: 22px;
+    }
+    .features-list {
+      text-align: left;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+    }
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13.5px;
+      color: #cbd5e1;
+      margin-bottom: 10px;
+    }
+    .feature-item:last-child {
+      margin-bottom: 0;
+    }
+    .feature-icon {
+      color: var(--success);
+      font-weight: bold;
+    }
+    .install-instructions {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+    }
+    .install-instructions strong {
+      color: #e2e8f0;
+    }
+    .links-footer {
+      margin-top: 24px;
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+    }
+    .links-footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+    .links-footer a:hover {
+      color: #a5b4fc;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-badge">SM</div>
+    <h1>StudyMate AI</h1>
+    <p class="tagline">The premium AI-powered study companion for modern university students.</p>
+
+    <div class="meta-pills">
+      <span class="pill">v1.0.0</span>
+      <span class="pill">~103 MB</span>
+      <span class="pill pill-green">Android 8.0+</span>
+    </div>
+
+    <a href="https://expo.dev/artifacts/eas/tDF_8GD-MHgyq_1Sp7Q7H3ETNoCv6LDR6Rt7Notj-Wc.apk" class="btn-download" download>
+      <svg fill="currentColor" viewBox="0 0 24 24">
+        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+      </svg>
+      Download APK (Direct)
+    </a>
+
+    <div class="features-list">
+      <div class="feature-item">
+        <span class="feature-icon">&#10003;</span>
+        <span>AI Concept Explanations & Cornell Notes</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">&#10003;</span>
+        <span>Pomodoro Focus Timer with Ambient Audio</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">&#10003;</span>
+        <span>Interactive Flashcards & Spaced Repetition</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">&#10003;</span>
+        <span>Class Timetable, Attendance & Alarms</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">&#10003;</span>
+        <span>Study Consistency Heatmap Analytics</span>
+      </div>
+    </div>
+
+    <div class="install-instructions">
+      <strong>Installation Tip:</strong> When downloading, your Android browser may display a prompt like <em>"File might be harmful"</em>. Tap <strong>Download anyway</strong> and enable <em>"Install unknown apps"</em> for your browser in Settings to install StudyMate AI.
+    </div>
+  </div>
+
+  <div class="links-footer">
+    <a href="/privacy.html">Privacy Policy</a>
+    <span>&bull;</span>
+    <a href="/">Admin Console</a>
+    <span>&bull;</span>
+    <a href="https://studymate-backend-api.onrender.com/api/v1/health" target="_blank">Cloud Status</a>
+  </div>
+</body>
+</html>
