@@ -35,7 +35,6 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/react": "~19.3.0",
-    "eas-cli": "^27.7.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.4",
     "tsx": "^4.23.15",
@@ -50,6 +49,7 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "eas-build-pre-install": "npm config set legacy-peer-deps true",
     "build:apk": "eas build -p android --profile preview",
     "build:aab": "eas build -p android --profile production"
   },
