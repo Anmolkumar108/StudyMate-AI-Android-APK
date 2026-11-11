@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "StudyMate AI",
-    "slug": "mobile",
+    "slug": "studymate-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -11,6 +11,9 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.studymate.ai",
+      "softwareKeyboardLayoutMode": "resize",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -55,6 +58,12 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow StudyMate AI to use Face ID or Biometrics to securely lock your study app."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
         }
       ]
     ],

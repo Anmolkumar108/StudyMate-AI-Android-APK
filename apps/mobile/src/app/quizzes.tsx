@@ -1,9 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
+  Animated,
   StyleSheet,
   Text,
   TextInput,
@@ -22,6 +22,130 @@ import {
   QuizQuestion,
 } from '@/types/quiz';
 
+// Quick syllabus topic suggestions for 1-tap generation
+const SYLLABUS_SUGGESTIONS = [
+  'Data Structures & Algorithms',
+  'Operating Systems & Threads',
+  'Computer Networks & Protocols',
+  'Database Management (DBMS)',
+  'Object-Oriented Programming (OOP)',
+  'Software Engineering & Agile',
+];
+
+interface AnimatedQuizCardProps {
+  quiz: Quiz;
+  index: number;
+  onStart: (quiz: Quiz) => void;
+  onDelete: (quizId: string) => void;
+}
+
+function AnimatedQuizCard({ quiz, index, onStart, onDelete }: AnimatedQuizCardProps) {
+  const theme = useTheme();
+  const animValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(animValue, {
+      toValue: 1,
+      delay: Math.min(index * 60, 360),
+      friction: 8,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  }, [animValue, index]);
+
+  const difficultyColor =
+    quiz.difficulty === 'easy'
+      ? theme.statusSuccess
+      : quiz.difficulty === 'hard'
+      ? theme.statusDanger
+      : theme.statusWarning;
+
+  const difficultyVariant =
+    quiz.difficulty === 'easy'
+      ? 'success'
+      : quiz.difficulty === 'hard'
+      ? 'danger'
+      : 'warning';
+
+  const estMinutes = Math.max(2, Math.round(quiz.question_count * 1.5));
+
+  return (
+    <Animated.View
+      style={{
+        opacity: animValue,
+        transform: [
+          {
+            translateY: animValue.interpolate({
+              inputRange: [0, 1],
+              outputRange: [18, 0],
+            }),
+          },
+        ],
+      }}>
+      <Card
+        variant="default"
+        style={[
+          styles.quizCard,
+          {
+            borderLeftWidth: 4,
+            borderLeftColor: difficultyColor,
+            backgroundColor: theme.cardBackground,
+            borderColor: theme.borderSubtle,
+          },
+        ]}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.cardTitleBlock}>
+            <View style={styles.quizTitleRow}>
+              <Text style={styles.quizLeadIcon}>🎯</Text>
+              <ThemedText type="titleMedium" style={styles.quizCardTitle} numberOfLines={2}>
+                {quiz.title}
+              </ThemedText>
+            </View>
+
+            <View style={styles.badgeRow}>
+              <Badge
+                label={`${quiz.question_count} Questions`}
+                variant="neutral"
+                size="sm"
+              />
+              <Badge
+                label={quiz.difficulty.toUpperCase()}
+                variant={difficultyVariant}
+                size="sm"
+                style={{ marginLeft: Spacing.xs }}
+              />
+              <Badge
+                label={`~${estMinutes} min`}
+                variant="neutral"
+                size="sm"
+                style={{ marginLeft: Spacing.xs }}
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => onDelete(quiz.id)}
+            style={[styles.deleteButton, { backgroundColor: theme.surfaceSubtle }]}
+            accessibilityLabel="Delete Quiz"
+            accessibilityRole="button">
+            <Text style={styles.deleteIconText}>🗑</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.quizActionRow}>
+          <Button
+            title="Start Quiz →"
+            variant="primary"
+            size="md"
+            onPress={() => onStart(quiz)}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </Card>
+    </Animated.View>
+  );
+}
+
 export default function QuizzesScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -33,15 +157,24 @@ export default function QuizzesScreen() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(true);
 
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
+  const [sortBy, setSortBy] = useState<'recent' | 'title' | 'count'>('recent');
+
   // Active quiz state for runner & results
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [startTime, setStartTime] = useState<number>(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [activeAttempt, setActiveAttempt] = useState<QuizAttempt | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [convertSuccessMsg, setConvertSuccessMsg] = useState<string | null>(null);
+
+  // AI Assistant Instant Check Feature (ON by default)
+  const [instantAiFeedback, setInstantAiFeedback] = useState(true);
 
   const params = useLocalSearchParams<{ docTitle?: string; docId?: string }>();
 
@@ -61,8 +194,38 @@ export default function QuizzesScreen() {
     }
   }, [params.docTitle]);
 
+  // Live Timer for Quiz Runner
+  useEffect(() => {
+    let timer: any = null;
+    if (mode === 'runner' && startTime > 0) {
+      timer = setInterval(() => {
+        setElapsedSeconds(Math.max(1, Math.round((Date.now() - startTime) / 1000)));
+      }, 1000);
+    } else {
+      setElapsedSeconds(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [mode, startTime]);
+
   const handleBack = () => {
-    if (mode === 'runner' || mode === 'result' || mode === 'create') {
+    if (mode === 'runner') {
+      Alert.alert(
+        'Exit Quiz?',
+        'Are you sure you want to exit? Your current in-progress answers will not be submitted.',
+        [
+          { text: 'Keep Studying', style: 'cancel' },
+          {
+            text: 'Exit',
+            style: 'destructive',
+            onPress: () => setMode('list'),
+          },
+        ]
+      );
+      return;
+    }
+    if (mode === 'result' || mode === 'create') {
       setMode('list');
       return;
     }
@@ -99,6 +262,7 @@ export default function QuizzesScreen() {
       setActiveQuestionIndex(0);
       setSelectedAnswers({});
       setStartTime(Date.now());
+      setElapsedSeconds(0);
       setActiveAttempt(null);
       setConvertSuccessMsg(null);
       setMode('runner');
@@ -107,18 +271,19 @@ export default function QuizzesScreen() {
     }
   };
 
-  const handleGenerate = async () => {
-    if (!topic.trim()) {
-      Alert.alert('Missing Topic', 'Please enter a topic or concept to generate a quiz.');
+  const handleGenerate = async (customTopic?: string, customCount?: number, customDiff?: 'easy' | 'medium' | 'hard') => {
+    const targetTopic = (customTopic ?? topic).trim();
+    if (!targetTopic) {
+      Alert.alert('Missing Topic', 'Please enter or select a syllabus topic to generate a quiz.');
       return;
     }
 
     setIsGenerating(true);
     try {
       const newQuiz = await quizApi.generate({
-        topic: topic.trim(),
-        difficulty,
-        question_count: questionCount,
+        topic: targetTopic,
+        difficulty: customDiff ?? difficulty,
+        question_count: customCount ?? questionCount,
       });
 
       setQuizzes((prev) => [newQuiz, ...prev]);
@@ -168,8 +333,11 @@ export default function QuizzesScreen() {
     setIsConverting(true);
     try {
       const res = await quizApi.convertMissedToFlashcards(activeQuiz.id, activeAttempt.id);
-      setConvertSuccessMsg(`🎉 Success! ${res.cards_created} flashcard(s) created in your Active Recall deck!`);
-      Alert.alert('Active Recall Synchronized', `${res.cards_created} missed questions have been saved to your Flashcard deck for spaced repetition review!`);
+      setConvertSuccessMsg(`🎉 Success! ${res.cards_created} flashcard(s) synchronized to your Active Recall deck!`);
+      Alert.alert(
+        'Active Recall Synchronized',
+        `${res.cards_created} missed questions have been saved to your Flashcard deck for spaced repetition review!`
+      );
     } catch {
       Alert.alert('Error', 'Failed to convert missed questions to flashcards.');
     } finally {
@@ -195,9 +363,37 @@ export default function QuizzesScreen() {
     ]);
   };
 
+  // Filtered & Sorted Quizzes
+  const filteredQuizzes = useMemo(() => {
+    return quizzes
+      .filter((q) => {
+        const matchesQuery =
+          !searchQuery.trim() ||
+          q.title.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesDifficulty =
+          difficultyFilter === 'all' || q.difficulty === difficultyFilter;
+        return matchesQuery && matchesDifficulty;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'title') return a.title.localeCompare(b.title);
+        if (sortBy === 'count') return b.question_count - a.question_count;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+  }, [quizzes, searchQuery, difficultyFilter, sortBy]);
+
+  const totalQuestionsSum = useMemo(() => {
+    return quizzes.reduce((sum, q) => sum + (q.question_count || 0), 0);
+  }, [quizzes]);
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   // --- RENDER HELPERS ---
 
-  const renderHeader = (title: string, subtitle?: string) => (
+  const renderHeader = (title: string, subtitle?: string, rightElement?: React.ReactNode) => (
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <TouchableOpacity
@@ -217,51 +413,152 @@ export default function QuizzesScreen() {
             </ThemedText>
           ) : null}
         </View>
+        {rightElement}
       </View>
     </View>
   );
 
-  // 1. RUNNER VIEW
+  // ==========================================
+  // 1. RUNNER VIEW (WITH REAL-TIME AI ASSISTANT EVALUATION)
+  // ==========================================
   if (mode === 'runner' && activeQuiz && activeQuiz.questions && activeQuiz.questions.length > 0) {
     const questions = activeQuiz.questions;
     const currentQ: QuizQuestion = questions[activeQuestionIndex];
     const totalQ = questions.length;
     const selectedOption = selectedAnswers[currentQ.id];
+    const isAnswered = Boolean(selectedOption);
+    const isCorrectPick = selectedOption === currentQ.correct_option_key;
 
     return (
       <ScreenWrapper scrollable includeTopInset includeBottomInset contentContainerStyle={styles.container}>
-        {renderHeader(activeQuiz.title, `Question ${activeQuestionIndex + 1} of ${totalQ}`)}
+        {renderHeader(
+          activeQuiz.title,
+          `Question ${activeQuestionIndex + 1} of ${totalQ}`,
+          <View style={styles.timerPill}>
+            <Text style={[styles.timerText, { color: theme.brandPrimary }]}>
+              ⏱ {formatTimer(elapsedSeconds)}
+            </Text>
+          </View>
+        )}
+
+        {/* AI Assistant Instant Check Mode Toggle */}
+        <View style={[styles.aiFeedbackToggleRow, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
+          <View style={styles.aiFeedbackInfoBlock}>
+            <ThemedText type="titleMedium" style={{ fontSize: 13, fontWeight: '700' }}>
+              🤖 AI Instant Answer Verification
+            </ThemedText>
+            <ThemedText type="bodySmall" style={{ color: theme.textSecondary, fontSize: 11 }}>
+              AI Assistant checks correctness and delivers immediate pedagogical explanations
+            </ThemedText>
+          </View>
+          <TouchableOpacity
+            onPress={() => setInstantAiFeedback((prev) => !prev)}
+            style={[
+              styles.feedbackToggleBtn,
+              { backgroundColor: instantAiFeedback ? theme.brandPrimary : theme.borderSubtle },
+            ]}>
+            <Text style={styles.feedbackToggleBtnText}>
+              {instantAiFeedback ? 'ACTIVE ✓' : 'OFF'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Progress indicator */}
-        <View style={[styles.progressBarContainer, { backgroundColor: theme.surfaceSubtle }]}>
-          <View
-            style={[
-              styles.progressBarFill,
-              {
-                backgroundColor: theme.brandPrimary,
-                width: `${((activeQuestionIndex + 1) / totalQ) * 100}%`,
-              },
-            ]}
-          />
+        <View style={styles.progressSection}>
+          <View style={styles.progressLabelRow}>
+            <ThemedText type="bodySmall" style={{ color: theme.textSecondary, fontWeight: '600' }}>
+              Progress: {Math.round(((activeQuestionIndex + 1) / totalQ) * 100)}%
+            </ThemedText>
+            <ThemedText type="bodySmall" style={{ color: theme.textSecondary }}>
+              {activeQuestionIndex + 1} / {totalQ}
+            </ThemedText>
+          </View>
+          <View style={[styles.progressBarContainer, { backgroundColor: theme.surfaceSubtle }]}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  backgroundColor: theme.brandPrimary,
+                  width: `${((activeQuestionIndex + 1) / totalQ) * 100}%`,
+                },
+              ]}
+            />
+          </View>
         </View>
 
         {/* Question card */}
-        <Card variant="default" style={styles.card}>
-          <Badge
-            label={`Difficulty: ${activeQuiz.difficulty.toUpperCase()}`}
-            variant="brand"
-            size="sm"
-            style={{ marginBottom: Spacing.sm, alignSelf: 'flex-start' }}
-          />
+        <Card variant="default" style={[styles.card, { borderColor: theme.borderSubtle }]}>
+          <View style={styles.questionCardHeader}>
+            <Badge
+              label={`QUESTION ${activeQuestionIndex + 1}`}
+              variant="brand"
+              size="sm"
+            />
+            <Badge
+              label={activeQuiz.difficulty.toUpperCase()}
+              variant={
+                activeQuiz.difficulty === 'easy'
+                  ? 'success'
+                  : activeQuiz.difficulty === 'hard'
+                  ? 'danger'
+                  : 'warning'
+              }
+              size="sm"
+            />
+          </View>
 
           <ThemedText type="headlineMedium" style={styles.questionText}>
             {currentQ.question_text}
           </ThemedText>
 
-          {/* Options list */}
+          {/* Options list with Real-Time AI Assistant Check */}
           <View style={styles.optionsContainer}>
             {currentQ.options.map((opt) => {
               const isSelected = selectedOption === opt.key;
+              const isRightAnswer = currentQ.correct_option_key === opt.key;
+
+              // Compute styles based on selection & AI feedback
+              let borderColor: string = theme.borderSubtle;
+              let backgroundColor: string = theme.surfaceSubtle;
+              let badgeBg: string = theme.borderSubtle;
+              let badgeTextColor: string = theme.text;
+              let statusText: string | null = null;
+              let statusColor: string = theme.textSecondary;
+
+              if (instantAiFeedback && isAnswered) {
+                if (isSelected && isRightAnswer) {
+                  // User chose correctly
+                  borderColor = theme.statusSuccess;
+                  backgroundColor = theme.badgeSuccessBackground;
+                  badgeBg = theme.statusSuccess;
+                  badgeTextColor = '#ffffff';
+                  statusText = '✓ Correct!';
+                  statusColor = theme.statusSuccess;
+                } else if (isSelected && !isRightAnswer) {
+                  // User chose incorrectly
+                  borderColor = theme.statusDanger;
+                  backgroundColor = theme.badgeDangerBackground;
+                  badgeBg = theme.statusDanger;
+                  badgeTextColor = '#ffffff';
+                  statusText = '✗ Incorrect';
+                  statusColor = theme.statusDanger;
+                } else if (!isSelected && isRightAnswer) {
+                  // Reveal correct answer
+                  borderColor = theme.statusSuccess;
+                  backgroundColor = theme.surfaceSubtle;
+                  badgeBg = theme.statusSuccess;
+                  badgeTextColor = '#ffffff';
+                  statusText = '✓ Correct Answer';
+                  statusColor = theme.statusSuccess;
+                }
+              } else if (isSelected) {
+                // Regular selection without instant verification
+                borderColor = theme.brandPrimary;
+                backgroundColor = theme.brandMuted;
+                badgeBg = theme.brandPrimary;
+                badgeTextColor = '#ffffff';
+              }
+
               return (
                 <TouchableOpacity
                   key={opt.key}
@@ -269,25 +566,13 @@ export default function QuizzesScreen() {
                   style={[
                     styles.optionButton,
                     {
-                      borderColor: isSelected ? theme.brandPrimary : theme.borderSubtle,
-                      backgroundColor: isSelected
-                        ? theme.brandMuted
-                        : theme.surfaceSubtle,
+                      borderColor,
+                      backgroundColor,
                     },
                   ]}
                   activeOpacity={0.7}>
-                  <View
-                    style={[
-                      styles.optionBadge,
-                      {
-                        backgroundColor: isSelected ? theme.brandPrimary : theme.borderSubtle,
-                      },
-                    ]}>
-                    <Text
-                      style={[
-                        styles.optionKeyText,
-                        { color: isSelected ? '#ffffff' : theme.text },
-                      ]}>
+                  <View style={[styles.optionBadge, { backgroundColor: badgeBg }]}>
+                    <Text style={[styles.optionKeyText, { color: badgeTextColor }]}>
                       {opt.key}
                     </Text>
                   </View>
@@ -295,16 +580,69 @@ export default function QuizzesScreen() {
                     style={[
                       styles.optionText,
                       {
-                        color: isSelected ? theme.brandPrimary : theme.text,
+                        color: isSelected ? theme.text : theme.text,
                         fontWeight: isSelected ? '600' : '400',
                       },
                     ]}>
                     {opt.text}
                   </Text>
+                  {statusText ? (
+                    <Text style={[styles.optionStatusText, { color: statusColor }]}>
+                      {statusText}
+                    </Text>
+                  ) : null}
                 </TouchableOpacity>
               );
             })}
           </View>
+
+          {/* AI Assistant Explanation Box (Delivered Instantly on Answer) */}
+          {instantAiFeedback && isAnswered && currentQ.explanation && (
+            <View
+              style={[
+                styles.aiExplanationCard,
+                {
+                  backgroundColor: isCorrectPick
+                    ? theme.badgeSuccessBackground
+                    : theme.surfaceSubtle,
+                  borderColor: isCorrectPick ? theme.statusSuccess : theme.borderSubtle,
+                },
+              ]}>
+              <View style={styles.aiExplanationHeader}>
+                <Text style={styles.aiAvatarIcon}>🤖</Text>
+                <ThemedText
+                  type="titleMedium"
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: isCorrectPick ? theme.badgeSuccessText : theme.brandPrimary,
+                  }}>
+                  StudyMate AI Assistant Explanation:
+                </ThemedText>
+              </View>
+              <ThemedText
+                type="bodySmall"
+                style={{
+                  color: theme.text,
+                  marginTop: 4,
+                  lineHeight: 20,
+                }}>
+                {currentQ.explanation}
+              </ThemedText>
+              <ThemedText
+                type="bodySmall"
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: 11,
+                  fontStyle: 'italic',
+                  marginTop: 6,
+                }}>
+                {isCorrectPick
+                  ? '🎯 Accurate recall reinforces neural connections for exam day.'
+                  : '💡 Review this core concept before proceeding to solidify recall.'}
+              </ThemedText>
+            </View>
+          )}
         </Card>
 
         {/* Navigation buttons */}
@@ -328,7 +666,7 @@ export default function QuizzesScreen() {
             />
           ) : (
             <Button
-              title={isSubmitting ? 'Scoring...' : 'Finish & Submit ✓'}
+              title={isSubmitting ? 'Submitting...' : 'Finish & Submit ✓'}
               variant="primary"
               size="md"
               loading={isSubmitting}
@@ -341,14 +679,17 @@ export default function QuizzesScreen() {
     );
   }
 
+  // ==========================================
   // 2. RESULTS VIEW
+  // ==========================================
   if (mode === 'result' && activeQuiz && activeAttempt) {
     const questions = activeQuiz.questions || [];
     const isPassing = activeAttempt.score_percentage >= 60;
+    const isMastery = activeAttempt.score_percentage >= 80;
 
     return (
       <ScreenWrapper scrollable includeTopInset includeBottomInset contentContainerStyle={styles.container}>
-        {renderHeader('Quiz Results', activeQuiz.title)}
+        {renderHeader('Quiz Evaluation', activeQuiz.title)}
 
         {/* Score summary card */}
         <Card
@@ -357,37 +698,82 @@ export default function QuizzesScreen() {
             styles.card,
             {
               borderLeftWidth: 4,
-              borderLeftColor: isPassing ? theme.statusSuccess : theme.statusDanger,
+              borderLeftColor: isMastery
+                ? theme.statusSuccess
+                : isPassing
+                ? theme.statusWarning
+                : theme.statusDanger,
             },
           ]}>
           <View style={styles.scoreRow}>
             <View>
-              <ThemedText type="headlineLarge" style={styles.scoreText}>
+              <ThemedText
+                type="headlineLarge"
+                style={[
+                  styles.scoreText,
+                  {
+                    color: isMastery
+                      ? theme.statusSuccess
+                      : isPassing
+                      ? theme.statusWarning
+                      : theme.statusDanger,
+                  },
+                ]}>
                 {Math.round(activeAttempt.score_percentage)}%
               </ThemedText>
-              <ThemedText type="bodyMedium" style={{ color: theme.textSecondary }}>
+              <ThemedText type="bodyMedium" style={{ color: theme.textSecondary, marginTop: 2 }}>
                 {activeAttempt.correct_count} of {activeAttempt.correct_count + activeAttempt.incorrect_count} questions correct
               </ThemedText>
             </View>
             <Badge
-              label={isPassing ? 'PASSED 🏆' : 'NEEDS REVIEW 📖'}
-              variant={isPassing ? 'success' : 'danger'}
+              label={
+                isMastery
+                  ? 'MASTERED 🏆'
+                  : isPassing
+                  ? 'PASSED 👍'
+                  : 'NEEDS REVIEW 📖'
+              }
+              variant={isMastery ? 'success' : isPassing ? 'warning' : 'danger'}
               size="md"
             />
           </View>
 
-          <ThemedText type="bodySmall" style={{ color: theme.textSecondary, marginTop: Spacing.sm }}>
-            ⏱ Time taken: {activeAttempt.time_taken_seconds} seconds
-          </ThemedText>
+          {/* Quick Metrics */}
+          <View style={styles.metricsRow}>
+            <View style={[styles.metricBox, { backgroundColor: theme.surfaceSubtle }]}>
+              <ThemedText type="titleMedium" style={{ fontSize: 13, color: theme.statusSuccess }}>
+                ✓ Correct
+              </ThemedText>
+              <ThemedText type="titleMedium" style={{ fontSize: 16, fontWeight: '700' }}>
+                {activeAttempt.correct_count}
+              </ThemedText>
+            </View>
+            <View style={[styles.metricBox, { backgroundColor: theme.surfaceSubtle }]}>
+              <ThemedText type="titleMedium" style={{ fontSize: 13, color: theme.statusDanger }}>
+                ✗ Missed
+              </ThemedText>
+              <ThemedText type="titleMedium" style={{ fontSize: 16, fontWeight: '700' }}>
+                {activeAttempt.incorrect_count}
+              </ThemedText>
+            </View>
+            <View style={[styles.metricBox, { backgroundColor: theme.surfaceSubtle }]}>
+              <ThemedText type="titleMedium" style={{ fontSize: 13, color: theme.brandPrimary }}>
+                ⏱ Duration
+              </ThemedText>
+              <ThemedText type="titleMedium" style={{ fontSize: 16, fontWeight: '700' }}>
+                {activeAttempt.time_taken_seconds}s
+              </ThemedText>
+            </View>
+          </View>
 
-          {/* Active Recall Conversion CTA */}
+          {/* Active Recall SM-2 Spaced Repetition Conversion CTA */}
           {activeAttempt.incorrect_count > 0 && (
-            <View style={[styles.recallCallout, { backgroundColor: theme.surfaceSubtle }]}>
-              <ThemedText type="titleMedium" style={{ fontSize: 16, marginBottom: 4 }}>
-                💡 Strengthen Weak Concepts
+            <View style={[styles.recallCallout, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
+              <ThemedText type="titleMedium" style={{ fontSize: 15, marginBottom: 4 }}>
+                🧠 Strengthen Weak Knowledge Nodes
               </ThemedText>
               <ThemedText type="bodySmall" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
-                You missed {activeAttempt.incorrect_count} question{activeAttempt.incorrect_count > 1 ? 's' : ''}. Convert them to Spaced Repetition flashcards with 1 tap.
+                You missed {activeAttempt.incorrect_count} question{activeAttempt.incorrect_count > 1 ? 's' : ''}. Convert them directly into Spaced Repetition Flashcards (SM-2) for automated daily revision.
               </ThemedText>
 
               {convertSuccessMsg ? (
@@ -409,7 +795,7 @@ export default function QuizzesScreen() {
 
         {/* Detailed Question Review */}
         <ThemedText type="titleMedium" style={{ marginTop: Spacing.md, marginBottom: Spacing.sm }}>
-          Question Review & Explanations
+          🤖 AI Question Review & Pedagogical Explanations
         </ThemedText>
 
         {questions.map((q, idx) => {
@@ -422,9 +808,19 @@ export default function QuizzesScreen() {
           const isCorrect = userAnswer === q.correct_option_key;
 
           return (
-            <Card key={q.id} variant="default" style={[styles.card, { marginBottom: Spacing.sm }]}>
+            <Card
+              key={q.id}
+              variant="default"
+              style={[
+                styles.card,
+                {
+                  marginBottom: Spacing.sm,
+                  borderLeftWidth: 3,
+                  borderLeftColor: isCorrect ? theme.statusSuccess : theme.statusDanger,
+                },
+              ]}>
               <View style={styles.reviewHeaderRow}>
-                <ThemedText type="titleMedium" style={{ fontSize: 15, flex: 1 }}>
+                <ThemedText type="titleMedium" style={{ fontSize: 15, flex: 1, paddingRight: Spacing.xs }}>
                   {idx + 1}. {q.question_text}
                 </ThemedText>
                 <Badge
@@ -456,7 +852,7 @@ export default function QuizzesScreen() {
                         styles.reviewOptionRow,
                         { backgroundColor: bgCol, borderColor: borderCol, borderWidth: 1 },
                       ]}>
-                      <Text style={{ fontWeight: '600', marginRight: Spacing.xs, color: theme.text }}>
+                      <Text style={{ fontWeight: '700', marginRight: Spacing.xs, color: theme.text }}>
                         {opt.key}:
                       </Text>
                       <Text style={{ flex: 1, color: theme.text }}>{opt.text}</Text>
@@ -468,9 +864,9 @@ export default function QuizzesScreen() {
               </View>
 
               {q.explanation ? (
-                <View style={[styles.explanationBox, { backgroundColor: theme.surfaceSubtle }]}>
-                  <ThemedText type="bodySmall" style={{ fontStyle: 'italic', color: theme.textSecondary }}>
-                    💡 {q.explanation}
+                <View style={[styles.explanationBox, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
+                  <ThemedText type="bodySmall" style={{ color: theme.text, lineHeight: 19 }}>
+                    💡 <Text style={{ fontWeight: 'bold' }}>AI Insight: </Text>{q.explanation}
                   </ThemedText>
                 </View>
               ) : null}
@@ -478,33 +874,44 @@ export default function QuizzesScreen() {
           );
         })}
 
-        <Button
-          title="Back to Quizzes"
-          variant="secondary"
-          size="md"
-          onPress={() => setMode('list')}
-          style={{ marginTop: Spacing.md, marginBottom: Spacing.xl }}
-        />
+        <View style={styles.resultActionsRow}>
+          <Button
+            title="🔄 Retake Quiz"
+            variant="secondary"
+            size="md"
+            onPress={() => handleStartQuiz(activeQuiz)}
+            style={{ flex: 1, marginRight: Spacing.xs }}
+          />
+          <Button
+            title="Back to Quizzes"
+            variant="primary"
+            size="md"
+            onPress={() => setMode('list')}
+            style={{ flex: 1, marginLeft: Spacing.xs }}
+          />
+        </View>
       </ScreenWrapper>
     );
   }
 
+  // ==========================================
   // 3. GENERATOR VIEW
+  // ==========================================
   if (mode === 'create') {
     return (
       <ScreenWrapper scrollable includeTopInset includeBottomInset contentContainerStyle={styles.container}>
-        {renderHeader('Create AI Quiz', 'Active Recall practice generator')}
+        {renderHeader('Create AI Quiz', 'StudyMate AI Active Recall Generator')}
 
-        <Card variant="default" style={styles.card}>
+        <Card variant="default" style={[styles.card, { borderColor: theme.borderSubtle }]}>
           <ThemedText type="titleMedium" style={{ marginBottom: Spacing.xs }}>
-            Topic or Concept
+            Syllabus Topic or Concept
           </ThemedText>
           <ThemedText type="bodySmall" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
-            Enter any syllabus topic, exam unit, or concept:
+            Enter any topic, chapter, or exam syllabus concept to generate questions:
           </ThemedText>
 
           <TextInput
-            placeholder="e.g. Operating Systems Scheduling, OSI Model, Photosynthesis..."
+            placeholder="e.g. Operating Systems Deadlocks, TCP vs UDP, B-Trees..."
             placeholderTextColor={theme.textSecondary}
             value={topic}
             onChangeText={setTopic}
@@ -518,28 +925,62 @@ export default function QuizzesScreen() {
             ]}
           />
 
-          {/* Difficulty Chips */}
-          <ThemedText type="titleMedium" style={{ marginTop: Spacing.md, marginBottom: Spacing.xs }}>
-            Difficulty Level
+          {/* Quick Syllabus Presets */}
+          <ThemedText type="bodySmall" style={{ color: theme.textSecondary, marginTop: Spacing.sm, marginBottom: Spacing.xs }}>
+            Or choose a suggested topic:
           </ThemedText>
-          <View style={styles.chipRow}>
-            {(['easy', 'medium', 'hard'] as const).map((d) => (
+          <View style={styles.presetChipWrap}>
+            {SYLLABUS_SUGGESTIONS.map((preset) => (
               <TouchableOpacity
-                key={d}
-                onPress={() => setDifficulty(d)}
+                key={preset}
+                onPress={() => setTopic(preset)}
                 style={[
-                  styles.chip,
+                  styles.presetChip,
                   {
-                    backgroundColor: difficulty === d ? theme.brandPrimary : theme.surfaceSubtle,
-                    borderColor: difficulty === d ? theme.brandPrimary : theme.borderSubtle,
+                    backgroundColor: topic === preset ? theme.brandMuted : theme.surfaceSubtle,
+                    borderColor: topic === preset ? theme.brandPrimary : theme.borderSubtle,
                   },
                 ]}>
                 <Text
                   style={[
-                    styles.chipText,
-                    { color: difficulty === d ? '#ffffff' : theme.text },
+                    styles.presetChipText,
+                    { color: topic === preset ? theme.brandPrimary : theme.text },
                   ]}>
-                  {d.toUpperCase()}
+                  {preset}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Difficulty Chips */}
+          <ThemedText type="titleMedium" style={{ marginTop: Spacing.md, marginBottom: Spacing.xs }}>
+            Cognitive Difficulty Level
+          </ThemedText>
+          <View style={styles.chipRow}>
+            {([
+              { key: 'easy', label: '🟢 EASY', sub: 'Definitions' },
+              { key: 'medium', label: '🟡 MEDIUM', sub: 'Application' },
+              { key: 'hard', label: '🔴 HARD', sub: 'Edge Cases' },
+            ] as const).map((d) => (
+              <TouchableOpacity
+                key={d.key}
+                onPress={() => setDifficulty(d.key)}
+                style={[
+                  styles.difficultyCard,
+                  {
+                    backgroundColor: difficulty === d.key ? theme.brandMuted : theme.surfaceSubtle,
+                    borderColor: difficulty === d.key ? theme.brandPrimary : theme.borderSubtle,
+                  },
+                ]}>
+                <Text
+                  style={[
+                    styles.difficultyLabel,
+                    { color: difficulty === d.key ? theme.brandPrimary : theme.text },
+                  ]}>
+                  {d.label}
+                </Text>
+                <Text style={[styles.difficultySub, { color: theme.textSecondary }]}>
+                  {d.sub}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -547,37 +988,51 @@ export default function QuizzesScreen() {
 
           {/* Question Count Chips */}
           <ThemedText type="titleMedium" style={{ marginTop: Spacing.md, marginBottom: Spacing.xs }}>
-            Number of Questions
+            Question Count
           </ThemedText>
           <View style={styles.chipRow}>
-            {[3, 5, 10].map((num) => (
+            {[
+              { num: 3, label: '3 Quick Check' },
+              { num: 5, label: '5 Standard' },
+              { num: 10, label: '10 Mock Exam' },
+            ].map((item) => (
               <TouchableOpacity
-                key={num}
-                onPress={() => setQuestionCount(num)}
+                key={item.num}
+                onPress={() => setQuestionCount(item.num)}
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: questionCount === num ? theme.brandPrimary : theme.surfaceSubtle,
-                    borderColor: questionCount === num ? theme.brandPrimary : theme.borderSubtle,
+                    backgroundColor: questionCount === item.num ? theme.brandPrimary : theme.surfaceSubtle,
+                    borderColor: questionCount === item.num ? theme.brandPrimary : theme.borderSubtle,
+                    flex: 1,
+                    alignItems: 'center',
                   },
                 ]}>
                 <Text
                   style={[
                     styles.chipText,
-                    { color: questionCount === num ? '#ffffff' : theme.text },
+                    { color: questionCount === item.num ? '#ffffff' : theme.text },
                   ]}>
-                  {num} Questions
+                  {item.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
+          {/* AI Engine Info */}
+          <View style={[styles.aiNoticeBox, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
+            <Text style={styles.aiNoticeIcon}>✨</Text>
+            <ThemedText type="bodySmall" style={{ color: theme.textSecondary, flex: 1, fontSize: 12 }}>
+              Questions and full pedagogical explanations will be generated by the StudyMate AI Assistant and stored in your database.
+            </ThemedText>
+          </View>
+
           <Button
-            title={isGenerating ? 'Generating with AI...' : '✨ Generate & Launch Quiz'}
+            title={isGenerating ? 'AI Generating Questions...' : '✨ Generate & Launch Quiz'}
             variant="primary"
             size="lg"
             loading={isGenerating}
-            onPress={handleGenerate}
+            onPress={() => handleGenerate()}
             style={{ marginTop: Spacing.lg }}
           />
 
@@ -593,14 +1048,72 @@ export default function QuizzesScreen() {
     );
   }
 
+  // ==========================================
   // 4. DEFAULT LIST VIEW
+  // ==========================================
   return (
     <ScreenWrapper scrollable includeTopInset includeBottomInset includeTabInset contentContainerStyle={styles.container}>
       {renderHeader('AI Quiz & Recall', 'Active recall quizzes generated from your syllabus')}
 
+      {/* Hero Pulse Card: AI Quiz Mastery Engine */}
+      <Card
+        variant="default"
+        style={[
+          styles.heroCard,
+          {
+            backgroundColor: theme.cardBackground,
+            borderColor: theme.borderSubtle,
+          },
+        ]}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroTitleBlock}>
+            <View style={styles.heroBadgeRow}>
+              <Badge label="🤖 AI Examiner Ready" variant="brand" size="sm" />
+              <Badge label="SM-2 Active" variant="success" size="sm" style={{ marginLeft: Spacing.xs }} />
+            </View>
+            <ThemedText type="titleMedium" style={styles.heroTitle}>
+              Quiz & Recall Mastery Engine
+            </ThemedText>
+          </View>
+        </View>
+
+        {/* Telemetry Stats Grid */}
+        <View style={styles.heroStatsRow}>
+          <View style={[styles.heroStatItem, { backgroundColor: theme.surfaceSubtle }]}>
+            <ThemedText type="titleMedium" style={{ fontWeight: '700', color: theme.brandPrimary, fontSize: 18 }}>
+              {quizzes.length}
+            </ThemedText>
+            <ThemedText type="bodySmall" style={{ color: theme.textSecondary, fontSize: 11 }}>
+              Total Quizzes
+            </ThemedText>
+          </View>
+          <View style={[styles.heroStatItem, { backgroundColor: theme.surfaceSubtle }]}>
+            <ThemedText type="titleMedium" style={{ fontWeight: '700', color: theme.statusSuccess, fontSize: 18 }}>
+              {totalQuestionsSum}
+            </ThemedText>
+            <ThemedText type="bodySmall" style={{ color: theme.textSecondary, fontSize: 11 }}>
+              Questions
+            </ThemedText>
+          </View>
+          <View style={[styles.heroStatItem, { backgroundColor: theme.surfaceSubtle }]}>
+            <ThemedText type="titleMedium" style={{ fontWeight: '700', color: theme.statusWarning, fontSize: 18 }}>
+              100%
+            </ThemedText>
+            <ThemedText type="bodySmall" style={{ color: theme.textSecondary, fontSize: 11 }}>
+              AI Verified
+            </ThemedText>
+          </View>
+        </View>
+
+        <ThemedText type="bodySmall" style={[styles.heroTipText, { color: theme.textSecondary }]}>
+          💡 Active testing triggers the testing effect, boosting syllabus retention by up to 250% over passive re-reading.
+        </ThemedText>
+      </Card>
+
+      {/* Action Row & Quick Accelerators */}
       <View style={styles.actionRow}>
         <Button
-          title="+ Create New Quiz"
+          title="✨ Create New AI Quiz"
           variant="primary"
           size="md"
           onPress={() => setMode('create')}
@@ -608,24 +1121,136 @@ export default function QuizzesScreen() {
         />
       </View>
 
+      {/* Quick Quiz Accelerators */}
+      <View style={styles.quickAcceleratorsRow}>
+        <TouchableOpacity
+          onPress={() => {
+            setTopic('Data Structures & Algorithms');
+            setQuestionCount(3);
+            setMode('create');
+          }}
+          style={[styles.acceleratorPill, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
+          <Text style={styles.acceleratorIcon}>⚡</Text>
+          <Text style={[styles.acceleratorText, { color: theme.text }]}>Rapid 3-Q Drill</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            setTopic('Operating Systems');
+            setQuestionCount(10);
+            setDifficulty('hard');
+            setMode('create');
+          }}
+          style={[styles.acceleratorPill, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
+          <Text style={styles.acceleratorIcon}>🎯</Text>
+          <Text style={[styles.acceleratorText, { color: theme.text }]}>Exam Mode (10 Qs)</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={[styles.searchBarContainer, { backgroundColor: theme.inputBackground, borderColor: theme.borderSubtle }]}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          placeholder="Search quizzes by topic, title..."
+          placeholderTextColor={theme.textSecondary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={[styles.searchInput, { color: theme.text }]}
+        />
+        {searchQuery ? (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+            <Text style={{ color: theme.textSecondary, fontWeight: 'bold' }}>✕</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {/* Difficulty Filter Chips */}
+      <View style={styles.filterChipsRow}>
+        {(['all', 'easy', 'medium', 'hard'] as const).map((diff) => (
+          <TouchableOpacity
+            key={diff}
+            onPress={() => setDifficultyFilter(diff)}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: difficultyFilter === diff ? theme.brandPrimary : theme.surfaceSubtle,
+                borderColor: difficultyFilter === diff ? theme.brandPrimary : theme.borderSubtle,
+              },
+            ]}>
+            <Text
+              style={[
+                styles.filterChipText,
+                { color: difficultyFilter === diff ? '#ffffff' : theme.text },
+              ]}>
+              {diff === 'all'
+                ? `All (${quizzes.length})`
+                : diff === 'easy'
+                ? '🟢 Easy'
+                : diff === 'medium'
+                ? '🟡 Medium'
+                : '🔴 Hard'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Sorting bar */}
+      <View style={styles.sortBar}>
+        <ThemedText type="bodySmall" style={{ color: theme.textSecondary, fontWeight: '600' }}>
+          Sort by:
+        </ThemedText>
+        <TouchableOpacity
+          onPress={() => setSortBy('recent')}
+          style={[
+            styles.sortBtn,
+            sortBy === 'recent' && { borderBottomColor: theme.brandPrimary, borderBottomWidth: 2 },
+          ]}>
+          <Text style={[styles.sortBtnText, { color: sortBy === 'recent' ? theme.brandPrimary : theme.textSecondary }]}>
+            Recent
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setSortBy('title')}
+          style={[
+            styles.sortBtn,
+            sortBy === 'title' && { borderBottomColor: theme.brandPrimary, borderBottomWidth: 2 },
+          ]}>
+          <Text style={[styles.sortBtnText, { color: sortBy === 'title' ? theme.brandPrimary : theme.textSecondary }]}>
+            Title A-Z
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setSortBy('count')}
+          style={[
+            styles.sortBtn,
+            sortBy === 'count' && { borderBottomColor: theme.brandPrimary, borderBottomWidth: 2 },
+          ]}>
+          <Text style={[styles.sortBtnText, { color: sortBy === 'count' ? theme.brandPrimary : theme.textSecondary }]}>
+            Most Qs
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Quiz List / Empty State */}
       {isLoadingList ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={theme.brandPrimary} />
           <ThemedText type="bodyMedium" style={{ marginTop: Spacing.sm, color: theme.textSecondary }}>
-            Loading quizzes...
+            Loading syllabus quizzes...
           </ThemedText>
         </View>
-      ) : quizzes.length === 0 ? (
-        <Card variant="default" style={styles.emptyCard}>
+      ) : filteredQuizzes.length === 0 ? (
+        <Card variant="default" style={[styles.emptyCard, { borderColor: theme.borderSubtle }]}>
           <Text style={styles.emptyIcon}>🎯</Text>
           <ThemedText type="headlineMedium" style={styles.emptyTitle}>
-            No Quizzes Yet
+            {searchQuery || difficultyFilter !== 'all' ? 'No Matching Quizzes' : 'No Quizzes Yet'}
           </ThemedText>
           <ThemedText type="bodyMedium" style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-            Generate your first interactive AI Quiz from any study topic to test your knowledge and convert missed questions into flashcards!
+            {searchQuery || difficultyFilter !== 'all'
+              ? 'Try changing your search keywords or clearing difficulty filters.'
+              : 'Generate your first interactive AI Quiz from any study topic to test your knowledge and convert missed questions into flashcards!'}
           </ThemedText>
           <Button
-            title="✨ Create First Quiz"
+            title="✨ Create AI Quiz"
             variant="primary"
             size="md"
             onPress={() => setMode('create')}
@@ -633,57 +1258,17 @@ export default function QuizzesScreen() {
           />
         </Card>
       ) : (
-        <FlatList
-          data={quizzes}
-          keyExtractor={(item) => item.id}
-          scrollEnabled={false}
-          renderItem={({ item }) => (
-            <Card variant="default" style={styles.card}>
-              <View style={styles.cardHeaderRow}>
-                <View style={{ flex: 1 }}>
-                  <ThemedText type="titleMedium" style={styles.quizCardTitle}>
-                    {item.title}
-                  </ThemedText>
-                  <View style={styles.badgeRow}>
-                    <Badge
-                      label={`${item.question_count} Qs`}
-                      variant="neutral"
-                      size="sm"
-                    />
-                    <Badge
-                      label={item.difficulty.toUpperCase()}
-                      variant={
-                        item.difficulty === 'easy'
-                          ? 'success'
-                          : item.difficulty === 'hard'
-                          ? 'danger'
-                          : 'brand'
-                      }
-                      size="sm"
-                      style={{ marginLeft: Spacing.xs }}
-                    />
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleDeleteQuiz(item.id)}
-                  style={styles.deleteButton}
-                  accessibilityLabel="Delete Quiz">
-                  <Text style={styles.deleteIconText}>🗑</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.quizActionRow}>
-                <Button
-                  title="Start Quiz →"
-                  variant="primary"
-                  size="sm"
-                  onPress={() => handleStartQuiz(item)}
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </Card>
-          )}
-        />
+        <View style={styles.quizListContainer}>
+          {filteredQuizzes.map((item, index) => (
+            <AnimatedQuizCard
+              key={item.id}
+              quiz={item}
+              index={index}
+              onStart={handleStartQuiz}
+              onDelete={handleDeleteQuiz}
+            />
+          ))}
+        </View>
       )}
     </ScreenWrapper>
   );
@@ -692,7 +1277,7 @@ export default function QuizzesScreen() {
 const styles = StyleSheet.create({
   container: {
     padding: Spacing.md,
-    paddingBottom: Spacing.xl * 2,
+    paddingBottom: 90,
   },
   header: {
     marginBottom: Spacing.md,
@@ -702,15 +1287,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.sm,
   },
   backButtonText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
   },
   headerTitleContainer: {
@@ -718,25 +1303,166 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
+    fontSize: 22,
+  },
+  timerPill: {
+    paddingHorizontal: Spacing.sm + 4,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: '#6366f140',
+  },
+  timerText: {
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  heroCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  heroTitleBlock: {
+    flex: 1,
+  },
+  heroBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  heroTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  heroStatItem: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  heroTipText: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
   },
   actionRow: {
     flexDirection: 'row',
+    marginBottom: Spacing.sm,
+  },
+  quickAcceleratorsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
-  card: {
+  acceleratorPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  acceleratorIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  acceleratorText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm + 4,
+    height: 46,
+    marginBottom: Spacing.sm,
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: Spacing.xs,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    height: '100%',
+  },
+  clearSearchBtn: {
+    padding: Spacing.xs,
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  filterChip: {
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sortBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  sortBtn: {
+    paddingVertical: 4,
+  },
+  sortBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  quizListContainer: {
+    gap: Spacing.sm,
+  },
+  quizCard: {
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
+    borderWidth: 1,
   },
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
+  cardTitleBlock: {
+    flex: 1,
+    paddingRight: Spacing.sm,
+  },
+  quizTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  quizLeadIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
   quizCardTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: Spacing.xs,
+    flex: 1,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -744,10 +1470,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   deleteButton: {
-    padding: Spacing.xs,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteIconText: {
-    fontSize: 18,
+    fontSize: 16,
   },
   quizActionRow: {
     marginTop: Spacing.md,
@@ -762,6 +1492,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.xl,
     textAlign: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
   },
   emptyIcon: {
     fontSize: 48,
@@ -774,6 +1506,7 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     textAlign: 'center',
     lineHeight: 20,
+    fontSize: 14,
   },
   textInput: {
     borderWidth: 1,
@@ -781,35 +1514,116 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     fontSize: 15,
   },
+  presetChipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  presetChip: {
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
   chipRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
     marginBottom: Spacing.xs,
   },
+  difficultyCard: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  difficultyLabel: {
+    fontWeight: '700',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  difficultySub: {
+    fontSize: 10,
+  },
   chip: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
   chipText: {
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 12,
+  },
+  aiNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.md,
+  },
+  aiNoticeIcon: {
+    fontSize: 18,
+    marginRight: Spacing.xs,
+  },
+  aiFeedbackToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.sm + 2,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+  },
+  aiFeedbackInfoBlock: {
+    flex: 1,
+    paddingRight: Spacing.sm,
+  },
+  feedbackToggleBtn: {
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+  },
+  feedbackToggleBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  progressSection: {
+    marginBottom: Spacing.sm,
+  },
+  progressLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   progressBarContainer: {
     height: 6,
     borderRadius: 3,
-    marginBottom: Spacing.md,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
     borderRadius: 3,
   },
+  questionCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
   questionText: {
-    fontSize: 18,
+    fontSize: 17,
     lineHeight: 24,
     marginBottom: Spacing.md,
+    fontWeight: '600',
   },
   optionsContainer: {
     gap: Spacing.sm,
@@ -817,7 +1631,7 @@ const styles = StyleSheet.create({
   optionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.sm + 2,
+    padding: Spacing.sm + 4,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
   },
@@ -837,6 +1651,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     flex: 1,
   },
+  optionStatusText: {
+    fontWeight: '700',
+    fontSize: 12,
+    marginLeft: Spacing.xs,
+  },
+  aiExplanationCard: {
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  aiExplanationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  aiAvatarIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
   navButtonRow: {
     flexDirection: 'row',
     marginTop: Spacing.md,
@@ -847,14 +1680,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scoreText: {
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: 'bold',
-    color: '#22c55e',
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  metricBox: {
+    flex: 1,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
   },
   recallCallout: {
     marginTop: Spacing.md,
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
+    borderWidth: 1,
   },
   reviewHeaderRow: {
     flexDirection: 'row',
@@ -873,5 +1717,16 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
     padding: Spacing.sm,
     borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  resultActionsRow: {
+    flexDirection: 'row',
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  card: {
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
   },
 });

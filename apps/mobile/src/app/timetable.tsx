@@ -21,6 +21,12 @@ import {
   scheduleClassReminder,
   sendImmediateNotification,
 } from '@/services/notifications';
+import {
+  loadCachedAttendanceSummary,
+  loadCachedTimetable,
+  saveCachedAttendanceSummary,
+  saveCachedTimetable,
+} from '@/services/storage/timetable-cache';
 import { Subject } from '@/types/subject';
 import {
   AttendanceRecord,
@@ -171,19 +177,42 @@ export default function TimetableScreen() {
   const [formEndDate, setFormEndDate] = useState<string>('');
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
 
-  // Initial Data Fetch
+  // Initial Data Fetch with offline cache hydration
   const fetchData = async () => {
+    // 1. Immediately hydrate from cache to eliminate blank states
+    try {
+      const [cachedWeekly, cachedSummary] = await Promise.all([
+        loadCachedTimetable(),
+        loadCachedAttendanceSummary(),
+      ]);
+      if (cachedWeekly && cachedWeekly.entries.length > 0) {
+        setEntries(cachedWeekly.entries);
+      }
+      if (cachedSummary) {
+        setAttendanceSummary(cachedSummary);
+      }
+    } catch {
+      // Ignore cache read error
+    }
+
     setIsLoading(true);
     try {
       const [weeklyData, subjectList, summary, dayAtt] = await Promise.all([
-        timetableApi.getWeekly().catch(() => ({ entries: [], by_day: {}, total_classes: 0 } as WeeklyTimetableResponse)),
+        timetableApi.getWeekly().catch(() => null),
         subjectApi.list().catch(() => []),
         timetableApi.getAttendanceSummary(75.0).catch(() => null),
         timetableApi.listAttendance({ attendance_date: selectedDateStr }).catch(() => [] as AttendanceRecord[]),
       ]);
-      setEntries(weeklyData.entries);
+
+      if (weeklyData) {
+        setEntries(weeklyData.entries);
+        saveCachedTimetable(weeklyData).catch(() => {});
+      }
       setSubjects(subjectList);
-      setAttendanceSummary(summary);
+      if (summary) {
+        setAttendanceSummary(summary);
+        saveCachedAttendanceSummary(summary).catch(() => {});
+      }
 
       const attMap: Record<string, AttendanceStatus> = {};
       dayAtt.forEach((rec) => {
@@ -193,7 +222,11 @@ export default function TimetableScreen() {
       });
       setDateAttendanceMap(attMap);
     } catch (err: any) {
-      Alert.alert('Load Error', err?.message || 'Could not load timetable.');
+      // If network fails but we had cache, don't show alert
+      const cached = await loadCachedTimetable();
+      if (!cached || cached.entries.length === 0) {
+        Alert.alert('Load Error', err?.message || 'Could not load timetable.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -1141,7 +1174,11 @@ export default function TimetableScreen() {
       </TouchableOpacity>
 
       {/* ATTENDANCE ANALYTICS MODAL */}
-      <Modal visible={isAttendanceModalOpen} transparent animationType="slide">
+      <Modal
+        visible={isAttendanceModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsAttendanceModalOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -1247,7 +1284,11 @@ export default function TimetableScreen() {
       </Modal>
 
       {/* ADD / EDIT CLASS SCHEDULE MODAL */}
-      <Modal visible={isModalOpen} transparent animationType="slide">
+      <Modal
+        visible={isModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsModalOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>

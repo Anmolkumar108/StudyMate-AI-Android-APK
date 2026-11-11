@@ -109,6 +109,21 @@ export async function loadPendingActions(): Promise<PendingTaskAction[]> {
 }
 
 /**
+ * Overwrites the pending task mutations queue with remaining unsynced actions.
+ */
+export async function savePendingActions(actions: PendingTaskAction[]): Promise<void> {
+  try {
+    if (actions.length === 0) {
+      await clearPendingActions();
+    } else {
+      await activeAdapter.setItem(TASK_PENDING_ACTIONS_KEY, JSON.stringify(actions));
+    }
+  } catch {
+    // Graceful fallback
+  }
+}
+
+/**
  * Clears all pending sync mutations after successful synchronization.
  */
 export async function clearPendingActions(): Promise<void> {
@@ -127,7 +142,31 @@ export function applyPendingActionsToTasks(tasks: Task[], actions: PendingTaskAc
   let result = [...tasks];
 
   for (const action of actions) {
-    if (action.type === 'toggle_status' && action.taskId) {
+    if (action.type === 'create_task' && action.payload) {
+      const p = action.payload;
+      const taskId = action.taskId || `offline_task_${action.id}`;
+      if (!result.some((t) => t.id === taskId)) {
+        const optimisticTask: Task = {
+          id: taskId,
+          user_id: 'local_offline_user',
+          title: (p.title as string) || 'Untitled Task',
+          description: (p.description as string) || null,
+          subject_id: (p.subject_id as string) || null,
+          depends_on_task_id: (p.depends_on_task_id as string) || null,
+          recurrence_pattern: (p.recurrence_pattern as string) || null,
+          recurrence_interval: (p.recurrence_interval as number) || 1,
+          priority: (p.priority as any) || 'medium',
+          status: (p.status as any) || 'todo',
+          estimated_minutes: (p.estimated_minutes as number) || null,
+          subtasks: (p.subtasks as any) || [],
+          due_datetime: (p.due_datetime as string) || null,
+          focus_minutes: 0,
+          created_at: action.createdAt || new Date().toISOString(),
+          updated_at: action.createdAt || new Date().toISOString(),
+        };
+        result = [optimisticTask, ...result];
+      }
+    } else if (action.type === 'toggle_status' && action.taskId) {
       result = result.map((t) => {
         if (t.id === action.taskId) {
           const newStatus: TaskStatus = t.status === 'completed' ? 'todo' : 'completed';

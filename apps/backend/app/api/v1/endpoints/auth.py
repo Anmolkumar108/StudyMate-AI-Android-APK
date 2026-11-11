@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from app.api.deps import get_auth_service, get_current_active_user, get_current_user
 from app.core.config import settings
 from app.models.user import User, UserStatus
+from app.repositories.audit_log_repo import AuditLogRepository
 from app.schemas.auth import (
     ForgotPasswordOtpRequest,
     ForgotPasswordRequest,
@@ -54,6 +55,7 @@ router = APIRouter()
 )
 async def register(
     payload: RegisterRequest,
+    request: Request,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     auto_activate: bool = False,
 ) -> User:
@@ -61,6 +63,18 @@ async def register(
         user_status = UserStatus.ACTIVE if auto_activate else UserStatus.PENDING_VERIFICATION
         user = await auth_service.register(
             payload, status=user_status, send_email=not auto_activate
+        )
+        client_ip = request.client.host if request.client else "unknown"
+        device_str = payload.device_name or "Android Device"
+        os_str = payload.device_os or "Android"
+        audit_repo = AuditLogRepository(auth_service.session)
+        await audit_repo.log(
+            action="auth.student_registered",
+            target_type="student_account",
+            actor_id=user.id,
+            target_id=str(user.id),
+            details=f"New registration: {user.email} from {device_str} ({os_str})",
+            ip_address=client_ip,
         )
         return user
     except EmailAlreadyRegisteredError as e:
@@ -390,20 +404,59 @@ async def login(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> TokenResponse:
     client_ip = request.client.host if request.client else None
+    audit_repo = AuditLogRepository(auth_service.session)
+    device_str = payload.device_name or "Android Device"
+    os_str = payload.device_os or "Android"
+
     try:
-        tokens, _ = await auth_service.login(payload, ip_address=client_ip)
+        tokens, user = await auth_service.login(payload, ip_address=client_ip)
+        await audit_repo.log(
+            action="auth.student_login_success",
+            target_type="student_session",
+            actor_id=user.id,
+            target_id=str(user.id),
+            details=f"Login successful: {user.email} on {device_str} ({os_str})",
+            ip_address=client_ip,
+        )
         return tokens
     except InvalidCredentialsError as e:
+        await audit_repo.log(
+            action="auth.student_login_failed",
+            target_type="auth_attempt",
+            actor_id=None,
+            target_id=payload.email,
+            details=f"Failed login (Invalid credentials) for {payload.email} on {device_str} ({os_str})",
+            ip_address=client_ip,
+            commit=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
         ) from e
     except AccountSuspendedError as e:
+        await audit_repo.log(
+            action="auth.student_login_failed",
+            target_type="auth_attempt",
+            actor_id=None,
+            target_id=payload.email,
+            details=f"Failed login (Suspended account) for {payload.email} on {device_str} ({os_str})",
+            ip_address=client_ip,
+            commit=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is suspended. Please contact support.",
         ) from e
     except AccountPendingVerificationError as e:
+        await audit_repo.log(
+            action="auth.student_login_failed",
+            target_type="auth_attempt",
+            actor_id=None,
+            target_id=payload.email,
+            details=f"Failed login (Pending verification) for {payload.email} on {device_str} ({os_str})",
+            ip_address=client_ip,
+            commit=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account verification is pending. Please verify your email.",

@@ -287,7 +287,12 @@ export const API_CONFIG = {
     analyticsHeatmap: '/api/v1/analytics/heatmap',
     search: '/api/v1/search',
     changePassword: '/api/v1/users/me/change-password',
+    pushToken: '/api/v1/users/me/push-token',
     exportData: '/api/v1/users/me/export',
     deleteAccount: '/api/v1/users/me',
+    activeAnnouncements: '/api/v1/announcements/active',
+    subjectTemplates: '/api/v1/subject-templates',
+    subjectTemplateEnroll: (id: string) => `/api/v1/subject-templates/${id}/enroll`,
+    devicePing: '/api/v1/telemetry/device-ping',
   },
 } as const;

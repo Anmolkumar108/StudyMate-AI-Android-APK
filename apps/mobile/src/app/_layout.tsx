@@ -1,13 +1,15 @@
 import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useState } from 'react';
-import { AppState, AppStateStatus, useColorScheme, View } from 'react-native';
+import { AppState, AppStateStatus, BackHandler, Platform, ToastAndroid, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { BiometricLockOverlay } from '@/components/biometric-lock-overlay';
 import BottomNav from '@/components/bottom-nav';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { isBiometricLockEnabled } from '@/services/biometrics';
+import { getDeviceDetails } from '@/services/device-info';
+import { telemetryApi } from '@/services/api/client';
 import {
   registerForPushNotificationsAsync,
   setupNotificationResponseListener,
@@ -96,9 +98,22 @@ function RootLayoutNav() {
     };
   }, [router]);
 
-  if (status === 'initializing') {
-    return null;
-  }
+  // Non-blocking device launch telemetry ping
+  useEffect(() => {
+    try {
+      const dev = getDeviceDetails();
+      telemetryApi
+        .devicePing({
+          device_name: dev.deviceName,
+          device_os: dev.deviceOs,
+          app_version: dev.appVersion,
+          is_first_launch: false,
+        })
+        .catch(() => {});
+    } catch {
+      // Non-blocking telemetry
+    }
+  }, []);
 
   const firstSegment = segments[0] as string | undefined;
   const isAuthRoute = firstSegment === '(auth)';
@@ -126,6 +141,71 @@ function RootLayoutNav() {
   const currentRoute = firstSegment || 'index';
   const isStandaloneRoute = Boolean(firstSegment) && STANDALONE_ROUTES.has(firstSegment as string);
   const showBottomNav = !isAuthRoute && !isStandaloneRoute && MAIN_TABS.has(currentRoute);
+
+  // Hardware Back Button & Edge Gesture Handler for Android Devices
+  useEffect(() => {
+    let lastBackPressTime = 0;
+
+    const handleHardwareBackPress = () => {
+      // 1. If biometric lock overlay is active or auth is initializing, block back
+      if (isLocked || status === 'initializing') {
+        return true;
+      }
+
+      // 2. If in auth group (login, register, verify-email, forgot-password)
+      if (isAuthRoute) {
+        if (router.canGoBack()) {
+          router.back();
+          return true;
+        }
+        return false; // let Android OS exit or handle from login screen
+      }
+
+      // 3. If in a standalone / inner route (e.g. /pomodoro, /study-planner, /notes, /exams, /subjects, etc.)
+      if (isStandaloneRoute) {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          // Safe fallback to home or explore if stack was cleared
+          router.replace('/');
+        }
+        return true;
+      }
+
+      // 4. If in a secondary main tab (explore/StudyHub, tasks, profile)
+      if (currentRoute !== 'index' && currentRoute !== '') {
+        router.replace('/');
+        return true;
+      }
+
+      // 5. If on the Home screen ('index' or '')
+      // Standard Android Double-Back-to-Exit safety pattern
+      const now = Date.now();
+      if (now - lastBackPressTime < 2000) {
+        return false; // second tap within 2s: allow Android default exit
+      }
+
+      lastBackPressTime = now;
+      if (Platform.OS === 'android' && ToastAndroid && typeof ToastAndroid.show === 'function') {
+        ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+      }
+      return true; // prevent exit on first back press on Home
+    };
+
+    if (BackHandler && typeof BackHandler.addEventListener === 'function') {
+      const sub = BackHandler.addEventListener(
+        'hardwareBackPress',
+        handleHardwareBackPress
+      );
+      return () => {
+        sub.remove();
+      };
+    }
+  }, [isLocked, status, isAuthRoute, isStandaloneRoute, currentRoute, router]);
+
+  if (status === 'initializing') {
+    return null;
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

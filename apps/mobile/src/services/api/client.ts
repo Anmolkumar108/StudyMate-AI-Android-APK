@@ -1559,6 +1559,22 @@ export const userSecurityApi = {
     });
   },
 
+  async registerPushToken(
+    pushToken: string,
+    platform: string = 'android',
+    deviceName?: string
+  ): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(API_CONFIG.endpoints.pushToken, {
+      method: 'POST',
+      body: JSON.stringify({
+        push_token: pushToken,
+        platform,
+        device_name: deviceName,
+      }),
+      requiresAuth: true,
+    });
+  },
+
   async deleteAccount(password: string, reason?: string): Promise<MessageResponse> {
     const res = await apiRequest<MessageResponse>(API_CONFIG.endpoints.deleteAccount, {
       method: 'DELETE',
@@ -1570,5 +1586,103 @@ export const userSecurityApi = {
     });
     await clearTokens();
     return res;
+  },
+};
+
+/**
+ * System Broadcast Announcements API (Admin -> Mobile Students)
+ */
+export interface MobileAnnouncement {
+  id: string;
+  title: string;
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  target_audience: 'all' | 'students';
+  is_active: boolean;
+  created_at: string;
+  expires_at?: string | null;
+}
+
+export const announcementApi = {
+  async getActiveAnnouncements(): Promise<MobileAnnouncement[]> {
+    return apiRequest<MobileAnnouncement[]>(API_CONFIG.endpoints.activeAnnouncements, {
+      method: 'GET',
+      requiresAuth: false,
+    });
+  },
+};
+
+/**
+ * Curated Subject Templates API (1-Click University Subject Enrollment)
+ */
+export interface MobileSubjectTemplate {
+  id: string;
+  name: string;
+  code: string | null;
+  category: string;
+  description: string | null;
+  color: string;
+  credits: number;
+  difficulty_level: string;
+  suggested_units: { title: string; weeks: number }[];
+  is_active: boolean;
+  enrolled_count: number;
+}
+
+export interface SubjectTemplateListResult {
+  items: MobileSubjectTemplate[];
+  total: number;
+  categories: string[];
+}
+
+export interface SubjectEnrollResult {
+  subject_id: string;
+  name: string;
+  code: string | null;
+  color: string | null;
+  message: string;
+}
+
+export const subjectTemplateApi = {
+  async list(category?: string): Promise<SubjectTemplateListResult> {
+    const qp = category ? `?category=${encodeURIComponent(category)}` : '';
+    return apiRequest<SubjectTemplateListResult>(
+      `${API_CONFIG.endpoints.subjectTemplates}${qp}`,
+      {
+        method: 'GET',
+        requiresAuth: false,
+      }
+    );
+  },
+
+  async enroll(templateId: string): Promise<SubjectEnrollResult> {
+    return apiRequest<SubjectEnrollResult>(
+      API_CONFIG.endpoints.subjectTemplateEnroll(templateId),
+      {
+        method: 'POST',
+        requiresAuth: true,
+      }
+    );
+  },
+};
+
+export interface DevicePingPayload {
+  device_name?: string;
+  device_os?: string;
+  app_version?: string;
+  is_first_launch?: boolean;
+  user_id?: string;
+}
+
+export const telemetryApi = {
+  async devicePing(payload: DevicePingPayload): Promise<{ status: string; action: string }> {
+    return apiRequest<{ status: string; action: string }>(
+      API_CONFIG.endpoints.devicePing,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        requiresAuth: false,
+      }
+    );
   },
 };

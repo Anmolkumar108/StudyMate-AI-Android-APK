@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/context/auth-context';
+import { getDeviceDetails } from '@/services/device-info';
 import { isGoogleOAuthConfigured, openGoogleAccountPage } from '@/services/google-auth';
 import { validateEmail, validatePassword } from '@/utils/validation';
 
@@ -61,11 +62,12 @@ export default function LoginScreen() {
     setFieldErrors({});
 
     try {
+      const dev = getDeviceDetails();
       await login({
         email: email.trim().toLowerCase(),
         password,
-        device_name: Platform.OS === 'android' ? 'Android Device' : 'Mobile Client',
-        device_os: Platform.OS,
+        device_name: dev.deviceName,
+        device_os: dev.deviceOs,
       });
     } catch (err) {
       setLocalError((err as Error).message || 'Unable to log in. Please check your credentials.');

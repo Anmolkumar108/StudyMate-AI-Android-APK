@@ -105,7 +105,9 @@ export function ScreenWrapper({
 
   const tabClearance = includeTabInset ? BottomTabInset + 35 : 0;
   const bottomInset = includeBottomInset ? insets.bottom : 0;
-  const effectivePaddingBottom = Math.max(tabClearance + bottomInset + Spacing.md, userPaddingBottom + tabClearance);
+  const effectivePaddingBottom = includeBottomInset
+    ? Math.max(tabClearance + bottomInset + Spacing.md, userPaddingBottom + tabClearance)
+    : tabClearance + userPaddingBottom;
 
   const finalContentStyle: ViewStyle = {
     ...userContentStyle,

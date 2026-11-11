@@ -17,6 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, ScreenWrapper } from '@/components/ui';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { examApi, subjectApi } from '@/services/api/client';
+import { loadCachedExams, saveCachedExams } from '@/services/storage/exams-cache';
 import { Exam } from '@/types/exam';
 import { Subject } from '@/types/subject';
 
@@ -46,18 +47,30 @@ export default function ExamsScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [generatingPlanExamId, setGeneratingPlanExamId] = useState<string | null>(null);
 
-  // Fetch data
+  // Fetch data with offline instant hydration
   const fetchData = async () => {
     setIsLoading(true);
+    // Instant hydration from local cache
+    try {
+      const cached = await loadCachedExams();
+      if (cached && cached.length > 0) {
+        setExams(cached);
+        setIsLoading(false);
+      }
+    } catch {
+      // Ignore
+    }
+
     try {
       const [examRes, subList] = await Promise.all([
         examApi.list(),
         subjectApi.list().catch(() => []),
       ]);
       setExams(examRes.items);
+      saveCachedExams(examRes.items);
       setSubjects(subList);
     } catch {
-      // Handle gracefully
+      // Graceful offline fallback
     } finally {
       setIsLoading(false);
     }
@@ -148,7 +161,11 @@ export default function ExamsScreen() {
           target_score: isNaN(scoreVal) ? undefined : scoreVal,
           syllabus_topics: validTopics,
         });
-        setExams((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+        setExams((prev) => {
+          const next = prev.map((e) => (e.id === updated.id ? updated : e));
+          saveCachedExams(next);
+          return next;
+        });
         Alert.alert('Updated', 'Exam details and syllabus topics saved successfully.');
       } else {
         const created = await examApi.create({
@@ -159,7 +176,11 @@ export default function ExamsScreen() {
           target_score: isNaN(scoreVal) ? undefined : scoreVal,
           syllabus_topics: validTopics,
         });
-        setExams((prev) => [created, ...prev]);
+        setExams((prev) => {
+          const next = [created, ...prev];
+          saveCachedExams(next);
+          return next;
+        });
         Alert.alert('Exam Registered 🎯', 'Upcoming exam added with syllabus topics!');
       }
       setIsModalOpen(false);
@@ -563,7 +584,11 @@ export default function ExamsScreen() {
       </View>
 
       {/* CREATE / EDIT EXAM MODAL */}
-      <Modal visible={isModalOpen} animationType="slide" transparent>
+      <Modal
+        visible={isModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsModalOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>

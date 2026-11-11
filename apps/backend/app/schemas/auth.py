@@ -11,6 +11,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     full_name: str = Field(..., min_length=1, max_length=150)
+    device_name: str | None = Field(default=None, max_length=150)
+    device_os: str | None = Field(default=None, max_length=50)
 
     @field_validator("email", mode="before")
     @classmethod

@@ -22,7 +22,9 @@ import { useNotes } from '@/hooks/use-notes';
 import { useSubjects } from '@/hooks/use-subjects';
 import {
   analyticsApi,
+  announcementApi,
   examApi,
+  MobileAnnouncement,
   studyPlannerApi,
   studySessionApi,
   taskApi,
@@ -112,6 +114,10 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [scheduleFilter, setScheduleFilter] = useState<'today' | 'week'>('today');
 
+  // Broadcast announcements state
+  const [announcements, setAnnouncements] = useState<MobileAnnouncement[]>([]);
+  const [dismissedAnnouncementIds, setDismissedAnnouncementIds] = useState<Set<string>>(new Set());
+
   // Profile menu modal state
   const [profileMenuVisible, setProfileMenuVisible] = useState<boolean>(false);
 
@@ -119,7 +125,19 @@ export default function HomeScreen() {
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setIsLoadingDashboard(true);
     try {
-      const [todayRes, weeklyRes, attRes, tasksRes, examRes, planRes, heatmapRes, overviewRes, todayFocusRes, localStatsRes] = await Promise.allSettled([
+      const [
+        todayRes,
+        weeklyRes,
+        attRes,
+        tasksRes,
+        examRes,
+        planRes,
+        heatmapRes,
+        overviewRes,
+        todayFocusRes,
+        localStatsRes,
+        announcementsRes,
+      ] = await Promise.allSettled([
         timetableApi.getToday(),
         timetableApi.getWeekly(),
         timetableApi.getAttendanceSummary(75.0),
@@ -130,7 +148,12 @@ export default function HomeScreen() {
         analyticsApi.getOverview('all').catch(() => null),
         studySessionApi.getTodaySummary().catch(() => null),
         loadPomodoroStats().catch(() => null),
+        announcementApi.getActiveAnnouncements().catch(() => []),
       ]);
+
+      if (announcementsRes.status === 'fulfilled' && Array.isArray(announcementsRes.value)) {
+        setAnnouncements(announcementsRes.value);
+      }
 
       if (todayRes.status === 'fulfilled') {
         setTodayClasses(todayRes.value || []);
@@ -522,6 +545,10 @@ export default function HomeScreen() {
     );
   };
 
+  const activeAnnouncement = useMemo(() => {
+    return announcements.find((a) => !dismissedAnnouncementIds.has(a.id)) || null;
+  }, [announcements, dismissedAnnouncementIds]);
+
   return (
     <View style={styles.screenWrapperRoot}>
       <ScreenWrapper
@@ -605,6 +632,58 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
+
+        {/* ========================================================================= */}
+        {/* 1.5 SYSTEM BROADCAST BANNER (From Platform Administrator)                 */}
+        {/* ========================================================================= */}
+        {activeAnnouncement && (
+          <View
+            style={[
+              styles.announcementBanner,
+              activeAnnouncement.severity === 'critical'
+                ? styles.announcementCritical
+                : activeAnnouncement.severity === 'warning'
+                ? styles.announcementWarning
+                : styles.announcementInfo,
+            ]}>
+            <View style={styles.announcementContent}>
+              <View style={styles.announcementHeaderRow}>
+                <View style={styles.announcementBadgeRow}>
+                  <Text style={styles.announcementIcon}>
+                    {activeAnnouncement.severity === 'critical'
+                      ? '🚨'
+                      : activeAnnouncement.severity === 'warning'
+                      ? '⚠️'
+                      : '📢'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.announcementSeverityBadge,
+                      activeAnnouncement.severity === 'critical'
+                        ? styles.announcementSeverityCritical
+                        : activeAnnouncement.severity === 'warning'
+                        ? styles.announcementSeverityWarning
+                        : styles.announcementSeverityInfo,
+                    ]}>
+                    {activeAnnouncement.severity.toUpperCase()}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() =>
+                    setDismissedAnnouncementIds(
+                      (prev) => new Set([...prev, activeAnnouncement.id])
+                    )
+                  }
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.announcementDismissBtn}>
+                  <Text style={styles.announcementDismissText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.announcementTitle}>{activeAnnouncement.title}</Text>
+              <Text style={styles.announcementMessage}>{activeAnnouncement.message}</Text>
+            </View>
+          </View>
+        )}
 
         {/* ========================================================================= */}
         {/* 2. HERO GREETING SECTION: Student Name + Hero Anime Mascot                */}
@@ -2825,5 +2904,78 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#64748B',
     marginTop: 1,
+  },
+  announcementBanner: {
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+  },
+  announcementInfo: {
+    backgroundColor: 'rgba(30, 27, 75, 0.7)',
+    borderColor: 'rgba(99, 102, 241, 0.35)',
+  },
+  announcementWarning: {
+    backgroundColor: 'rgba(69, 26, 3, 0.7)',
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  announcementCritical: {
+    backgroundColor: 'rgba(76, 5, 25, 0.75)',
+    borderColor: 'rgba(244, 63, 94, 0.45)',
+  },
+  announcementContent: {
+    gap: 4,
+  },
+  announcementHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  announcementBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  announcementIcon: {
+    fontSize: 14,
+  },
+  announcementSeverityBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  announcementSeverityInfo: {
+    backgroundColor: 'rgba(99, 102, 241, 0.25)',
+    color: '#A5B4FC',
+  },
+  announcementSeverityWarning: {
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+    color: '#FCD34D',
+  },
+  announcementSeverityCritical: {
+    backgroundColor: 'rgba(244, 63, 94, 0.25)',
+    color: '#FDA4AF',
+  },
+  announcementDismissBtn: {
+    padding: 4,
+  },
+  announcementDismissText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  announcementTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 2,
+  },
+  announcementMessage: {
+    fontSize: 12,
+    color: '#CBD5E1',
+    lineHeight: 16,
   },
 });

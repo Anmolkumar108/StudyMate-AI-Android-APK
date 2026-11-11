@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { flashcardApi } from '@/services/api/client';
+import { loadCachedDecks, saveCachedDecks } from '@/services/storage/flashcards-cache';
 import {
   ApiError,
   AuthError,
@@ -83,8 +84,14 @@ export function useFlashcards(): UseFlashcardsReturn {
       try {
         const data = await flashcardApi.listDecks(params);
         setDecks(data);
+        saveCachedDecks(data);
       } catch (err) {
-        setError(formatErrorMessage(err));
+        setDecks((prev) => {
+          if (prev.length === 0) {
+            setError(formatErrorMessage(err));
+          }
+          return prev;
+        });
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -96,14 +103,30 @@ export function useFlashcards(): UseFlashcardsReturn {
   useEffect(() => {
     let isMounted = true;
     async function load() {
+      let cached: FlashcardDeck[] | null = null;
+      try {
+        cached = await loadCachedDecks();
+        if (cached && cached.length > 0 && isMounted) {
+          setDecks(cached);
+          setIsLoading(false);
+        }
+      } catch {
+        // Fallback
+      }
+
       try {
         const data = await flashcardApi.listDecks();
         if (isMounted) {
           setDecks(data);
+          saveCachedDecks(data);
+          setError(null);
         }
       } catch (err) {
         if (isMounted) {
-          setError(formatErrorMessage(err));
+          const hasCached = cached && cached.length > 0;
+          if (!hasCached) {
+            setError(formatErrorMessage(err));
+          }
         }
       } finally {
         if (isMounted) {
@@ -137,7 +160,11 @@ export function useFlashcards(): UseFlashcardsReturn {
       setError(null);
       try {
         const newDeck = await flashcardApi.createDeck(payload);
-        setDecks((prev) => [newDeck, ...prev]);
+        setDecks((prev) => {
+          const next = [newDeck, ...prev];
+          saveCachedDecks(next);
+          return next;
+        });
         return newDeck;
       } catch (err) {
         const msg = formatErrorMessage(err);
@@ -153,7 +180,11 @@ export function useFlashcards(): UseFlashcardsReturn {
       setError(null);
       try {
         const updated = await flashcardApi.updateDeck(id, payload);
-        setDecks((prev) => prev.map((d) => (d.id === id ? updated : d)));
+        setDecks((prev) => {
+          const next = prev.map((d) => (d.id === id ? updated : d));
+          saveCachedDecks(next);
+          return next;
+        });
         return updated;
       } catch (err) {
         const msg = formatErrorMessage(err);
@@ -168,7 +199,11 @@ export function useFlashcards(): UseFlashcardsReturn {
     setError(null);
     try {
       await flashcardApi.deleteDeck(id);
-      setDecks((prev) => prev.filter((d) => d.id !== id));
+      setDecks((prev) => {
+        const next = prev.filter((d) => d.id !== id);
+        saveCachedDecks(next);
+        return next;
+      });
     } catch (err) {
       const msg = formatErrorMessage(err);
       setError(msg);

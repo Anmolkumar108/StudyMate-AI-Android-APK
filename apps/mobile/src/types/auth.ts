@@ -38,6 +38,8 @@ export interface RegisterRequest {
   email: string;
   password: string;
   full_name: string;
+  device_name?: string;
+  device_os?: string;
 }
 
 export interface LoginRequest {

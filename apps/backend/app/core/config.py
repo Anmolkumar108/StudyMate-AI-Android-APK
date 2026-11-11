@@ -96,5 +96,10 @@ class Settings(BaseSettings):
     AI_API_KEY: str | None = None
     AI_DAILY_BUDGET_LIMIT_USD: float = 10.0
 
+    # Administrative Security & Hardening (MFA / Rate Limiting)
+    ADMIN_SECURITY_KEY: str = "979831"
+    ADMIN_LOGIN_MAX_FAILED_ATTEMPTS: int = 5
+    ADMIN_LOGIN_LOCKOUT_MINUTES: int = 15
+
 
 settings = Settings()

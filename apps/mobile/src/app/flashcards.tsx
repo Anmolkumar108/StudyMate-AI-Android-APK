@@ -62,10 +62,14 @@ export default function FlashcardsScreen() {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
+  const [masteredCardIds, setMasteredCardIds] = useState<Set<string>>(() => new Set());
+  const [reviewCardIds, setReviewCardIds] = useState<Set<string>>(() => new Set());
+  const [isSessionCompleted, setIsSessionCompleted] = useState(false);
 
   // Filter & Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<'default' | 'title' | 'cards'>('default');
 
   // Modals State
   const [isDeckModalOpen, setIsDeckModalOpen] = useState(false);
@@ -85,9 +89,14 @@ export default function FlashcardsScreen() {
     return map;
   }, [subjects]);
 
-  // Filtered decks list
+  // Total cards across all decks
+  const totalCardsCount = useMemo(() => {
+    return decks.reduce((acc, d) => acc + (d.card_count || 0), 0);
+  }, [decks]);
+
+  // Filtered and sorted decks list
   const filteredDecks = useMemo(() => {
-    return decks.filter((deck) => {
+    const list = decks.filter((deck) => {
       const matchesSubject =
         selectedSubjectId === null || deck.subject_id === selectedSubjectId;
       const cleanSearch = searchQuery.trim().toLowerCase();
@@ -97,7 +106,15 @@ export default function FlashcardsScreen() {
         (deck.description && deck.description.toLowerCase().includes(cleanSearch));
       return matchesSubject && matchesSearch;
     });
-  }, [decks, selectedSubjectId, searchQuery]);
+
+    if (sortMode === 'title') {
+      return [...list].sort((a, b) => a.title.localeCompare(b.title));
+    }
+    if (sortMode === 'cards') {
+      return [...list].sort((a, b) => (b.card_count || 0) - (a.card_count || 0));
+    }
+    return list;
+  }, [decks, selectedSubjectId, searchQuery, sortMode]);
 
   // Back navigation handler
   const handleBack = () => {
@@ -105,6 +122,9 @@ export default function FlashcardsScreen() {
       setSelectedDeck(null);
       setIsFlipped(false);
       setCurrentCardIndex(0);
+      setMasteredCardIds(new Set());
+      setReviewCardIds(new Set());
+      setIsSessionCompleted(false);
       fetchDecks();
     } else {
       if (router.canGoBack()) {
@@ -126,6 +146,9 @@ export default function FlashcardsScreen() {
         setCurrentCardIndex(0);
         setIsFlipped(false);
         setIsShuffled(false);
+        setMasteredCardIds(new Set());
+        setReviewCardIds(new Set());
+        setIsSessionCompleted(false);
         setDeckTab(initialTab);
       } catch {
         // Error handled in hook
@@ -265,6 +288,41 @@ export default function FlashcardsScreen() {
     }
   };
 
+  // Self-assessment feedback handler
+  const handleRateCard = (cardId: string, rating: 'review' | 'mastered') => {
+    if (!cardId) return;
+    if (rating === 'mastered') {
+      setMasteredCardIds((prev) => {
+        const next = new Set(prev);
+        next.add(cardId);
+        return next;
+      });
+      setReviewCardIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+    } else {
+      setReviewCardIds((prev) => {
+        const next = new Set(prev);
+        next.add(cardId);
+        return next;
+      });
+      setMasteredCardIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+    }
+
+    if (currentCardIndex < studyCards.length - 1) {
+      setIsFlipped(false);
+      setCurrentCardIndex((prev) => prev + 1);
+    } else {
+      setIsSessionCompleted(true);
+    }
+  };
+
   // Selected deck's subject info
   const selectedDeckSubject = selectedDeck?.subject_id
     ? subjectMap.get(selectedDeck.subject_id)
@@ -272,7 +330,7 @@ export default function FlashcardsScreen() {
 
   return (
     <ScreenWrapper
-      scrollable={!selectedDeck || deckTab === 'cards'}
+      scrollable={true}
       includeTopInset
       includeBottomInset
       includeTabInset={false}
@@ -342,13 +400,243 @@ export default function FlashcardsScreen() {
       {/* ==================================================================== */}
       {!selectedDeck && (
         <View style={styles.decksView}>
-          {/* Search Input */}
+          {/* Active Recall Mastery Pulse Hero Card */}
+          <View
+            style={[
+              styles.heroCard,
+              {
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.brandPrimary + '35',
+              },
+            ]}>
+            <View style={styles.heroTopRow}>
+              <View
+                style={[
+                  styles.heroBadge,
+                  {
+                    backgroundColor: theme.brandPrimary + '1A',
+                    borderColor: theme.brandPrimary + '38',
+                  },
+                ]}>
+                <Text style={{ fontSize: 13 }}>🧠</Text>
+                <ThemedText
+                  type="smallBold"
+                  style={{
+                    color: theme.brandPrimary,
+                    fontSize: 11,
+                    letterSpacing: 0.6,
+                  }}>
+                  ACTIVE RECALL ENGINE
+                </ThemedText>
+              </View>
+
+              <View
+                style={[
+                  styles.retentionPill,
+                  {
+                    backgroundColor: theme.statusSuccess + '1A',
+                    borderColor: theme.statusSuccess + '35',
+                  },
+                ]}>
+                <View
+                  style={[styles.pulseDot, { backgroundColor: theme.statusSuccess }]}
+                />
+                <ThemedText
+                  type="small"
+                  style={{
+                    color: theme.statusSuccess,
+                    fontSize: 11,
+                    fontWeight: '700',
+                  }}>
+                  Spaced Retention
+                </ThemedText>
+              </View>
+            </View>
+
+            <ThemedText type="headlineMedium" style={styles.heroTitle}>
+              Accelerate Memory & Long-Term Recall
+            </ThemedText>
+            <ThemedText
+              type="bodySmall"
+              style={{ color: theme.textSecondary, lineHeight: 18 }}>
+              Flip cards, self-assess understanding, and cement key university concepts before exams.
+            </ThemedText>
+
+            {/* Metrics Grid */}
+            <View
+              style={[
+                styles.heroMetricsGrid,
+                {
+                  backgroundColor: theme.inputBackground,
+                  borderColor: theme.borderSubtle,
+                },
+              ]}>
+              <View style={styles.heroMetricItem}>
+                <ThemedText
+                  type="titleMedium"
+                  style={{ color: theme.brandPrimary, fontWeight: '800' }}>
+                  {decks.length}
+                </ThemedText>
+                <ThemedText
+                  type="small"
+                  style={{ color: theme.textSecondary, fontSize: 11 }}>
+                  📚 Decks
+                </ThemedText>
+              </View>
+
+              <View
+                style={[
+                  styles.heroMetricDivider,
+                  { backgroundColor: theme.borderSubtle },
+                ]}
+              />
+
+              <View style={styles.heroMetricItem}>
+                <ThemedText
+                  type="titleMedium"
+                  style={{ color: theme.text, fontWeight: '800' }}>
+                  {totalCardsCount}
+                </ThemedText>
+                <ThemedText
+                  type="small"
+                  style={{ color: theme.textSecondary, fontSize: 11 }}>
+                  🎴 Total Cards
+                </ThemedText>
+              </View>
+
+              <View
+                style={[
+                  styles.heroMetricDivider,
+                  { backgroundColor: theme.borderSubtle },
+                ]}
+              />
+
+              <View style={styles.heroMetricItem}>
+                <ThemedText
+                  type="titleMedium"
+                  style={{ color: theme.statusSuccess, fontWeight: '800' }}>
+                  {decks.filter((d) => (d.card_count || 0) > 0).length}
+                </ThemedText>
+                <ThemedText
+                  type="small"
+                  style={{ color: theme.textSecondary, fontSize: 11 }}>
+                  ⚡ Ready Decks
+                </ThemedText>
+              </View>
+            </View>
+          </View>
+
+          {/* Search Input with Prefix & Clear Button */}
           <Input
             placeholder="Search decks..."
             value={searchQuery}
             onChangeText={setSearchQuery}
+            showClearButton={Boolean(searchQuery)}
+            onClear={() => setSearchQuery('')}
+            leftElement={
+              <Text style={{ fontSize: 15, marginRight: 6 }}>🔍</Text>
+            }
             containerStyle={styles.searchInput}
           />
+
+          {/* Quick Sort Bar */}
+          <View style={styles.sortRow}>
+            <ThemedText
+              type="small"
+              style={{ color: theme.textTertiary, marginRight: 4, fontSize: 11 }}>
+              Sort:
+            </ThemedText>
+
+            <Pressable
+              onPress={() => setSortMode('default')}
+              accessibilityRole="button"
+              accessibilityLabel="Sort by recent"
+              style={[
+                styles.sortChip,
+                {
+                  backgroundColor:
+                    sortMode === 'default'
+                      ? theme.brandPrimary + '20'
+                      : theme.cardBackground,
+                  borderColor:
+                    sortMode === 'default'
+                      ? theme.brandPrimary
+                      : theme.borderSubtle,
+                },
+              ]}>
+              <ThemedText
+                type="smallBold"
+                style={{
+                  color:
+                    sortMode === 'default'
+                      ? theme.brandPrimary
+                      : theme.textSecondary,
+                  fontSize: 11,
+                }}>
+                🕒 Recent
+              </ThemedText>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setSortMode('title')}
+              accessibilityRole="button"
+              accessibilityLabel="Sort by deck title"
+              style={[
+                styles.sortChip,
+                {
+                  backgroundColor:
+                    sortMode === 'title'
+                      ? theme.brandPrimary + '20'
+                      : theme.cardBackground,
+                  borderColor:
+                    sortMode === 'title'
+                      ? theme.brandPrimary
+                      : theme.borderSubtle,
+                },
+              ]}>
+              <ThemedText
+                type="smallBold"
+                style={{
+                  color:
+                    sortMode === 'title'
+                      ? theme.brandPrimary
+                      : theme.textSecondary,
+                  fontSize: 11,
+                }}>
+                🔤 Title A-Z
+              </ThemedText>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setSortMode('cards')}
+              accessibilityRole="button"
+              accessibilityLabel="Sort by card count"
+              style={[
+                styles.sortChip,
+                {
+                  backgroundColor:
+                    sortMode === 'cards'
+                      ? theme.brandPrimary + '20'
+                      : theme.cardBackground,
+                  borderColor:
+                    sortMode === 'cards'
+                      ? theme.brandPrimary
+                      : theme.borderSubtle,
+                },
+              ]}>
+              <ThemedText
+                type="smallBold"
+                style={{
+                  color:
+                    sortMode === 'cards'
+                      ? theme.brandPrimary
+                      : theme.textSecondary,
+                  fontSize: 11,
+                }}>
+                📑 Most Cards
+              </ThemedText>
+            </Pressable>
+          </View>
 
           {/* Subject Filter Chips */}
           <ScrollView
@@ -538,7 +826,8 @@ export default function FlashcardsScreen() {
             {selectedDeck.description ? (
               <ThemedText
                 type="bodySmall"
-                style={{ color: theme.textSecondary, marginTop: 4 }}>
+                numberOfLines={deckTab === 'study' ? 1 : undefined}
+                style={{ color: theme.textSecondary, marginTop: 2 }}>
                 {selectedDeck.description}
               </ThemedText>
             ) : null}
@@ -618,41 +907,191 @@ export default function FlashcardsScreen() {
                     setIsCardModalOpen(true);
                   }}
                 />
+              ) : isSessionCompleted ? (
+                /* Session Completion Celebration Screen */
+                <View
+                  style={[
+                    styles.completionCard,
+                    {
+                      backgroundColor: theme.cardBackground,
+                      borderColor: theme.statusSuccess + '50',
+                    },
+                  ]}>
+                  <Text style={{ fontSize: 44, textAlign: 'center', marginBottom: 6 }}>
+                    🎉
+                  </Text>
+                  <ThemedText
+                    type="headlineMedium"
+                    style={{ textAlign: 'center', fontWeight: '800' }}>
+                    Study Session Complete!
+                  </ThemedText>
+                  <ThemedText
+                    type="bodySmall"
+                    style={{
+                      color: theme.textSecondary,
+                      textAlign: 'center',
+                      marginTop: 4,
+                      lineHeight: 19,
+                    }}>
+                    Great job! You reviewed all {studyCards.length} flashcards. Active recall strengthens long-term memory retention.
+                  </ThemedText>
+
+                  {/* Results summary stats */}
+                  <View
+                    style={[
+                      styles.sessionStatsBox,
+                      {
+                        backgroundColor: theme.inputBackground,
+                        borderColor: theme.borderSubtle,
+                      },
+                    ]}>
+                    <View style={styles.sessionStatItem}>
+                      <ThemedText
+                        type="titleMedium"
+                        style={{ color: theme.statusSuccess, fontWeight: '800' }}>
+                        {masteredCardIds.size}
+                      </ThemedText>
+                      <ThemedText
+                        type="small"
+                        style={{ color: theme.textSecondary, fontSize: 11 }}>
+                        🟢 Mastered
+                      </ThemedText>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.heroMetricDivider,
+                        { backgroundColor: theme.borderSubtle },
+                      ]}
+                    />
+
+                    <View style={styles.sessionStatItem}>
+                      <ThemedText
+                        type="titleMedium"
+                        style={{ color: theme.statusDanger, fontWeight: '800' }}>
+                        {reviewCardIds.size}
+                      </ThemedText>
+                      <ThemedText
+                        type="small"
+                        style={{ color: theme.textSecondary, fontSize: 11 }}>
+                        🔴 Need Review
+                      </ThemedText>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.heroMetricDivider,
+                        { backgroundColor: theme.borderSubtle },
+                      ]}
+                    />
+
+                    <View style={styles.sessionStatItem}>
+                      <ThemedText
+                        type="titleMedium"
+                        style={{ color: theme.brandPrimary, fontWeight: '800' }}>
+                        {studyCards.length > 0
+                          ? Math.round(
+                              (masteredCardIds.size / studyCards.length) * 100
+                            )
+                          : 0}
+                        %
+                      </ThemedText>
+                      <ThemedText
+                        type="small"
+                        style={{ color: theme.textSecondary, fontSize: 11 }}>
+                        🎯 Accuracy
+                      </ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={{ gap: Spacing.sm, marginTop: Spacing.md, width: '100%' }}>
+                    <Button
+                      title="🔄 Study Again"
+                      variant="primary"
+                      size="md"
+                      onPress={() => {
+                        setCurrentCardIndex(0);
+                        setIsFlipped(false);
+                        setMasteredCardIds(new Set());
+                        setReviewCardIds(new Set());
+                        setIsSessionCompleted(false);
+                      }}
+                      accessibilityLabel="Study this deck again"
+                    />
+
+                    <Button
+                      title="← Back to All Decks"
+                      variant="secondary"
+                      size="md"
+                      onPress={handleBack}
+                      accessibilityLabel="Return to flashcard decks list"
+                    />
+                  </View>
+                </View>
               ) : (
                 <>
                   {/* Study Toolbar: Position & Shuffle */}
                   <View style={styles.studyToolbar}>
-                    <ThemedText type="smallBold" style={{ color: theme.textSecondary }}>
-                      CARD {currentCardIndex + 1} OF {studyCards.length}
-                    </ThemedText>
-
-                    <Pressable
-                      onPress={handleToggleShuffle}
-                      accessibilityRole="button"
-                      accessibilityLabel="Shuffle study cards"
-                      style={[
-                        styles.shuffleBtn,
-                        {
-                          backgroundColor: isShuffled
-                            ? theme.brandPrimary + '20'
-                            : theme.inputBackground,
-                          borderColor: isShuffled
-                            ? theme.brandPrimary
-                            : theme.borderSubtle,
-                        },
-                      ]}>
-                      <Text style={{ fontSize: 13 }}>🔀</Text>
+                    <View style={styles.studyCardCounterRow}>
                       <ThemedText
                         type="smallBold"
-                        style={{
-                          color: isShuffled
-                            ? theme.brandPrimary
-                            : theme.textSecondary,
-                          fontSize: 12,
-                        }}>
-                        {isShuffled ? 'Shuffled' : 'Shuffle'}
+                        style={{ color: theme.brandPrimary }}>
+                        CARD {currentCardIndex + 1} OF {studyCards.length}
                       </ThemedText>
-                    </Pressable>
+                      <ThemedText
+                        type="small"
+                        style={{ color: theme.textSecondary, fontSize: 11 }}>
+                        ({Math.round(((currentCardIndex + 1) / studyCards.length) * 100)}%)
+                      </ThemedText>
+                    </View>
+
+                    <View style={styles.studyToolbarRightActions}>
+                      <Pressable
+                        onPress={handleToggleShuffle}
+                        accessibilityRole="button"
+                        accessibilityLabel="Shuffle study cards"
+                        style={[
+                          styles.shuffleBtn,
+                          {
+                            backgroundColor: isShuffled
+                              ? theme.brandPrimary + '20'
+                              : theme.inputBackground,
+                            borderColor: isShuffled
+                              ? theme.brandPrimary
+                              : theme.borderSubtle,
+                          },
+                        ]}>
+                        <Text style={{ fontSize: 13 }}>🔀</Text>
+                        <ThemedText
+                          type="smallBold"
+                          style={{
+                            color: isShuffled
+                              ? theme.brandPrimary
+                              : theme.textSecondary,
+                            fontSize: 12,
+                          }}>
+                          {isShuffled ? 'Shuffled' : 'Shuffle'}
+                        </ThemedText>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => setIsSessionCompleted(true)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Finish study session"
+                        style={[
+                          styles.finishBtn,
+                          {
+                            backgroundColor: theme.inputBackground,
+                            borderColor: theme.borderSubtle,
+                          },
+                        ]}>
+                        <ThemedText
+                          type="smallBold"
+                          style={{ color: theme.textSecondary, fontSize: 11 }}>
+                          Finish 🏁
+                        </ThemedText>
+                      </Pressable>
+                    </View>
                   </View>
 
                   {/* Progress Indicator Bar */}
@@ -681,6 +1120,119 @@ export default function FlashcardsScreen() {
                     totalCards={studyCards.length}
                   />
 
+                  {/* Self-Assessment Active Recall Rating Buttons */}
+                  <View style={styles.recallFeedbackContainer}>
+                    <ThemedText
+                      type="small"
+                      style={{
+                        color: theme.textTertiary,
+                        textAlign: 'center',
+                        marginBottom: 6,
+                        fontSize: 10,
+                        letterSpacing: 0.5,
+                      }}>
+                      DID YOU RECALL THIS CONCEPT?
+                    </ThemedText>
+
+                    {currentCardIndex === studyCards.length - 1 && (
+                      <ThemedText
+                        type="small"
+                        style={{
+                          color: theme.brandPrimary,
+                          textAlign: 'center',
+                          marginBottom: 8,
+                          fontSize: 11,
+                          fontWeight: '600',
+                        }}>
+                        💡 Final Card — Rate below or tap Finish 🏁 to view results!
+                      </ThemedText>
+                    )}
+
+                    <View style={styles.recallButtonsRow}>
+                      <Pressable
+                        onPress={() =>
+                          handleRateCard(
+                            studyCards[currentCardIndex]?.id,
+                            'review'
+                          )
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel="Mark card as needs review"
+                        style={({ pressed }) => [
+                          styles.recallScoreBtn,
+                          {
+                            backgroundColor: reviewCardIds.has(
+                              studyCards[currentCardIndex]?.id
+                            )
+                              ? theme.statusDanger + '26'
+                              : theme.inputBackground,
+                            borderColor: reviewCardIds.has(
+                              studyCards[currentCardIndex]?.id
+                            )
+                              ? theme.statusDanger
+                              : theme.borderSubtle,
+                            opacity: pressed ? 0.75 : 1,
+                            transform: [{ scale: pressed ? 0.96 : 1 }],
+                          },
+                        ]}>
+                        <Text style={{ fontSize: 13 }}>🔴</Text>
+                        <ThemedText
+                          type="smallBold"
+                          style={{
+                            color: reviewCardIds.has(
+                              studyCards[currentCardIndex]?.id
+                            )
+                              ? theme.statusDanger
+                              : theme.textSecondary,
+                            fontSize: 12,
+                          }}>
+                          Need Review
+                        </ThemedText>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() =>
+                          handleRateCard(
+                            studyCards[currentCardIndex]?.id,
+                            'mastered'
+                          )
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel="Mark card as mastered"
+                        style={({ pressed }) => [
+                          styles.recallScoreBtn,
+                          {
+                            backgroundColor: masteredCardIds.has(
+                              studyCards[currentCardIndex]?.id
+                            )
+                              ? theme.statusSuccess + '26'
+                              : theme.inputBackground,
+                            borderColor: masteredCardIds.has(
+                              studyCards[currentCardIndex]?.id
+                            )
+                              ? theme.statusSuccess
+                              : theme.borderSubtle,
+                            opacity: pressed ? 0.75 : 1,
+                            transform: [{ scale: pressed ? 0.96 : 1 }],
+                          },
+                        ]}>
+                        <Text style={{ fontSize: 13 }}>🟢</Text>
+                        <ThemedText
+                          type="smallBold"
+                          style={{
+                            color: masteredCardIds.has(
+                              studyCards[currentCardIndex]?.id
+                            )
+                              ? theme.statusSuccess
+                              : theme.textSecondary,
+                            fontSize: 12,
+                          }}>
+                          Got It / Mastered
+                        </ThemedText>
+                      </Pressable>
+                    </View>
+                  </View>
+
                   {/* Navigation Controls Row */}
                   <View style={styles.studyControlsRow}>
                     <Button
@@ -688,7 +1240,7 @@ export default function FlashcardsScreen() {
                       variant="secondary"
                       size="md"
                       onPress={handlePrevCard}
-                      disabled={studyCards.length <= 1}
+                      disabled={currentCardIndex === 0}
                       accessibilityLabel="Go to previous card"
                       style={{ flex: 1 }}
                     />
@@ -703,12 +1255,21 @@ export default function FlashcardsScreen() {
                     />
 
                     <Button
-                      title="Next →"
-                      variant="secondary"
+                      title={currentCardIndex === studyCards.length - 1 ? 'Finish 🏁' : 'Next →'}
+                      variant={currentCardIndex === studyCards.length - 1 ? 'primary' : 'secondary'}
                       size="md"
-                      onPress={handleNextCard}
-                      disabled={studyCards.length <= 1}
-                      accessibilityLabel="Go to next card"
+                      onPress={() => {
+                        if (currentCardIndex === studyCards.length - 1) {
+                          setIsSessionCompleted(true);
+                        } else {
+                          handleNextCard();
+                        }
+                      }}
+                      accessibilityLabel={
+                        currentCardIndex === studyCards.length - 1
+                          ? 'Finish study session and view summary'
+                          : 'Go to next card'
+                      }
                       style={{ flex: 1 }}
                     />
                   </View>
@@ -781,13 +1342,13 @@ export default function FlashcardsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: Spacing.xl,
+    paddingBottom: 72,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   backButton: {
     width: MinTouchTarget,
@@ -830,13 +1391,14 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   deckDetailView: {
-    gap: Spacing.md,
+    gap: Spacing.xs,
   },
   deckInfoCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    gap: Spacing.sm,
+    gap: 4,
   },
   deckInfoTop: {
     flexDirection: 'row',
@@ -876,7 +1438,7 @@ const styles = StyleSheet.create({
   },
   modeButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 6,
     alignItems: 'center',
     borderRadius: BorderRadius.sm,
   },
@@ -888,13 +1450,14 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   studyWorkspace: {
-    paddingTop: Spacing.xs,
+    paddingTop: 2,
   },
   studyToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
+    marginBottom: 4,
+    marginTop: 4,
   },
   shuffleBtn: {
     flexDirection: 'row',
@@ -909,7 +1472,7 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     overflow: 'hidden',
-    marginBottom: Spacing.xs,
+    marginBottom: 2,
   },
   progressBarFill: {
     height: '100%',
@@ -919,10 +1482,152 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.xl,
   },
   cardsListWorkspace: {
     gap: Spacing.xs,
     paddingTop: Spacing.xs,
+  },
+  heroCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.2,
+    padding: Spacing.md,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  retentionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  heroTitle: {
+    fontWeight: '800',
+    fontSize: 18,
+    lineHeight: 23,
+    marginTop: 2,
+  },
+  heroMetricsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    marginTop: 6,
+  },
+  heroMetricItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  heroMetricDivider: {
+    width: 1,
+    height: 28,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+    paddingHorizontal: 2,
+  },
+  sortChip: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  completionCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    marginVertical: Spacing.md,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  sessionStatsBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.md,
+    width: '100%',
+  },
+  sessionStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  studyCardCounterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  studyToolbarRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  finishBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  recallFeedbackContainer: {
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+    alignItems: 'center',
+  },
+  recallButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    width: '100%',
+  },
+  recallScoreBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
   },
 });

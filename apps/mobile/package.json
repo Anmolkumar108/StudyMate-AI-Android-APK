@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~58.0.25",
     "expo": "~58.0.21",
+    "expo-audio": "^58.0.11",
     "expo-constants": "~58.0.14",
     "expo-device": "~58.0.5",
     "expo-document-picker": "~58.0.4",
@@ -47,7 +48,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "build:apk": "eas build -p android --profile preview",
+    "build:aab": "eas build -p android --profile production"
   },
   "private": true
 }

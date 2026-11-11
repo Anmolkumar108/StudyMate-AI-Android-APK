@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { subjectApi } from '@/services/api/client';
+import { loadCachedSubjects, saveCachedSubjects } from '@/services/storage/subjects-cache';
 import { ApiError, AuthError, ConflictError, NetworkError, NotFoundError } from '@/types/auth';
 import { Subject, SubjectCreate, SubjectUpdate } from '@/types/subject';
 
@@ -59,8 +60,14 @@ export function useSubjects(): UseSubjectsReturn {
     try {
       const data = await subjectApi.list();
       setSubjects(data);
+      saveCachedSubjects(data);
     } catch (err) {
-      setError(formatErrorMessage(err));
+      setSubjects((prev) => {
+        if (prev.length === 0) {
+          setError(formatErrorMessage(err));
+        }
+        return prev;
+      });
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -70,14 +77,30 @@ export function useSubjects(): UseSubjectsReturn {
   useEffect(() => {
     let isMounted = true;
     async function load() {
+      let cached: Subject[] | null = null;
+      try {
+        cached = await loadCachedSubjects();
+        if (cached && cached.length > 0 && isMounted) {
+          setSubjects(cached);
+          setIsLoading(false);
+        }
+      } catch {
+        // Fallback
+      }
+
       try {
         const data = await subjectApi.list();
         if (isMounted) {
           setSubjects(data);
+          saveCachedSubjects(data);
+          setError(null);
         }
       } catch (err) {
         if (isMounted) {
-          setError(formatErrorMessage(err));
+          const hasCached = cached && cached.length > 0;
+          if (!hasCached) {
+            setError(formatErrorMessage(err));
+          }
         }
       } finally {
         if (isMounted) {
@@ -97,7 +120,11 @@ export function useSubjects(): UseSubjectsReturn {
     setError(null);
     try {
       const newSubject = await subjectApi.create(payload);
-      setSubjects((prev) => [newSubject, ...prev.filter((s) => s.id !== newSubject.id)]);
+      setSubjects((prev) => {
+        const next = [newSubject, ...prev.filter((s) => s.id !== newSubject.id)];
+        saveCachedSubjects(next);
+        return next;
+      });
       return newSubject;
     } catch (err) {
       const msg = formatErrorMessage(err);
@@ -111,7 +138,11 @@ export function useSubjects(): UseSubjectsReturn {
       setError(null);
       try {
         const updated = await subjectApi.update(id, payload);
-        setSubjects((prev) => prev.map((s) => (s.id === id ? updated : s)));
+        setSubjects((prev) => {
+          const next = prev.map((s) => (s.id === id ? updated : s));
+          saveCachedSubjects(next);
+          return next;
+        });
         return updated;
       } catch (err) {
         const msg = formatErrorMessage(err);
@@ -126,7 +157,11 @@ export function useSubjects(): UseSubjectsReturn {
     setError(null);
     try {
       await subjectApi.delete(id);
-      setSubjects((prev) => prev.filter((s) => s.id !== id));
+      setSubjects((prev) => {
+        const next = prev.filter((s) => s.id !== id);
+        saveCachedSubjects(next);
+        return next;
+      });
     } catch (err) {
       const msg = formatErrorMessage(err);
       setError(msg);

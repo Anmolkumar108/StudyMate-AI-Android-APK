@@ -129,6 +129,15 @@ export function NoteCard({
           {/* Top Badges & Meta Row */}
           <View style={styles.badgeRow}>
             <View style={styles.leftBadges}>
+              {subjectName ? (
+                <Badge
+                  label={subjectName}
+                  dotColor={subjectColor || undefined}
+                  variant="neutral"
+                  size="sm"
+                />
+              ) : null}
+
               {note.is_pinned ? (
                 <Animated.View style={{ transform: [{ scale: pinScaleAnim }] }}>
                   <Pressable
@@ -139,15 +148,6 @@ export function NoteCard({
                     <Badge label="📌 Pinned" variant="warning" size="sm" />
                   </Pressable>
                 </Animated.View>
-              ) : null}
-
-              {subjectName ? (
-                <Badge
-                  label={subjectName}
-                  dotColor={subjectColor || undefined}
-                  variant="neutral"
-                  size="sm"
-                />
               ) : null}
             </View>
 
@@ -171,7 +171,7 @@ export function NoteCard({
             {note.content.replace(/\n+/g, ' ')}
           </ThemedText>
 
-          {/* Footer Meta Row: Word Count, Pin Action & Chevron */}
+          {/* Footer Meta Row: Word Count, Reading Time, Pin Action & Chevron */}
           <View style={styles.footerRow}>
             <View style={styles.metaPillGroup}>
               {wordCount > 0 ? (
@@ -191,6 +191,21 @@ export function NoteCard({
                 </View>
               ) : null}
 
+              <View
+                style={[
+                  styles.readingTimePill,
+                  {
+                    backgroundColor: theme.badgeNeutralBackground,
+                    borderColor: theme.borderSubtle,
+                  },
+                ]}>
+                <ThemedText
+                  type="small"
+                  style={{ color: theme.textSecondary, fontSize: 11 }}>
+                  ⏱ ~{Math.max(1, Math.ceil(wordCount / 180))} min
+                </ThemedText>
+              </View>
+
               {onTogglePin ? (
                 <Animated.View style={{ transform: [{ scale: pinScaleAnim }] }}>
                   <Pressable
@@ -203,9 +218,9 @@ export function NoteCard({
                       {
                         backgroundColor: note.is_pinned
                           ? theme.badgeWarningBackground
-                          : theme.badgeNeutralBackground,
+                          : theme.surfaceSubtle,
                         borderColor: note.is_pinned
-                          ? theme.statusWarning + '40'
+                          ? theme.statusWarning
                           : theme.borderSubtle,
                         opacity: pressed ? 0.75 : 1,
                       },
@@ -216,9 +231,9 @@ export function NoteCard({
                       style={{
                         color: note.is_pinned ? theme.statusWarning : theme.textSecondary,
                         fontWeight: '600',
-                        fontSize: 12,
+                        fontSize: 11,
                       }}>
-                      {note.is_pinned ? 'Pinned' : 'Pin'}
+                      {note.is_pinned ? 'Unpin' : 'Pin'}
                     </ThemedText>
                   </Pressable>
                 </Animated.View>
@@ -297,6 +312,12 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   wordCountPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  readingTimePill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: BorderRadius.sm,

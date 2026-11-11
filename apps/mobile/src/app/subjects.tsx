@@ -12,12 +12,13 @@ import {
   View,
 } from 'react-native';
 
+import { CuratedTemplatesModal } from '@/components/subjects/curated-templates-modal';
 import { SubjectCard } from '@/components/subjects/subject-card';
 import { SubjectDetailModal } from '@/components/subjects/subject-detail-modal';
 import { SubjectFormModal } from '@/components/subjects/subject-form-modal';
 import { ThemedText } from '@/components/themed-text';
 import { Badge, Button, Card, EmptyState, Input, ScreenWrapper } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing } from '@/constants/theme';
 import { useSubjects } from '@/hooks/use-subjects';
 import { useTheme } from '@/hooks/use-theme';
 import { Subject, SubjectCreate, SubjectUpdate } from '@/types/subject';
@@ -49,6 +50,7 @@ export default function SubjectsScreen() {
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
+  const [isCuratedModalVisible, setIsCuratedModalVisible] = useState(false);
 
   // Entrance animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -190,18 +192,34 @@ export default function SubjectsScreen() {
               </ThemedText>
             </View>
 
-            {/* Add Subject Action Button */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.gradientAddBtn,
-                pressed && styles.gradientAddBtnPressed,
-              ]}
-              onPress={handleOpenAddModal}
-              accessibilityRole="button"
-              accessibilityLabel="Add New Subject">
-              <Text style={styles.addBtnIcon}>＋</Text>
-              <Text style={styles.addBtnText}>Add</Text>
-            </Pressable>
+            {/* Action Buttons Group */}
+            <View style={styles.headerActionsGroup}>
+              {/* Explore Curated Library Button */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.libraryBtn,
+                  pressed && styles.libraryBtnPressed,
+                ]}
+                onPress={() => setIsCuratedModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Explore Curated University Templates">
+                <Text style={styles.libraryBtnIcon}>🎓</Text>
+                <Text style={styles.libraryBtnText}>Library</Text>
+              </Pressable>
+
+              {/* Add Subject Action Button */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.gradientAddBtn,
+                  pressed && styles.gradientAddBtnPressed,
+                ]}
+                onPress={handleOpenAddModal}
+                accessibilityRole="button"
+                accessibilityLabel="Add New Subject">
+                <Text style={styles.addBtnIcon}>＋</Text>
+                <Text style={styles.addBtnText}>Add</Text>
+              </Pressable>
+            </View>
           </View>
 
           <ThemedText type="bodySmall" style={styles.headerSubtitle}>
@@ -326,9 +344,25 @@ export default function SubjectsScreen() {
         </View>
 
         {/* ========================================================================= */}
-        {/* 5. ERROR BANNER WITH RETRY                                                */}
+        {/* 5. ERROR BANNER OR OFFLINE REASSURANCE                                    */}
         {/* ========================================================================= */}
-        {error ? (
+        {error && subjects.length > 0 ? (
+          <View
+            style={[
+              styles.offlineNotice,
+              {
+                backgroundColor: theme.badgeNeutralBackground,
+                borderColor: theme.borderSubtle,
+              },
+            ]}>
+            <Text style={{ fontSize: 13 }}>⚡</Text>
+            <ThemedText
+              type="small"
+              style={{ color: theme.textSecondary, flex: 1, fontSize: 12 }}>
+              Offline Mode — Viewing saved subjects from device storage
+            </ThemedText>
+          </View>
+        ) : error ? (
           <Card variant="outlined" style={[styles.errorCard, { borderColor: theme.statusDanger }]}>
             <ThemedText
               type="bodyMedium"
@@ -374,14 +408,37 @@ export default function SubjectsScreen() {
             }
             contentContainerStyle={styles.emptyScrollContent}
             ListEmptyComponent={
-              <EmptyState
-                icon="📚"
-                title="No subjects added yet"
-                description="Organize your study goals, lecture notes, and revision by adding your academic courses."
-                actionLabel="+ Add Your First Subject"
-                onAction={handleOpenAddModal}
-                actionVariant="primary"
-              />
+              <View style={styles.emptyStateWrapper}>
+                <EmptyState
+                  icon="📚"
+                  title="No subjects added yet"
+                  description="Organize your study goals, lecture notes, and revision by adding your academic courses."
+                  actionLabel="+ Add Custom Subject"
+                  onAction={handleOpenAddModal}
+                  actionVariant="primary"
+                />
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.exploreCuratedEmptyBtn,
+                    pressed && styles.exploreCuratedEmptyBtnPressed,
+                  ]}
+                  onPress={() => setIsCuratedModalVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Explore Curated University Library">
+                  <View style={styles.exploreCuratedIconBox}>
+                    <Text style={styles.exploreCuratedEmptyIcon}>🎓</Text>
+                  </View>
+                  <View style={styles.exploreCuratedTextBox}>
+                    <Text style={styles.exploreCuratedEmptyTitle}>
+                      Explore Curated Library
+                    </Text>
+                    <Text style={styles.exploreCuratedEmptySub}>
+                      1-Tap enroll into Computer Science, AI, Maths & Sciences
+                    </Text>
+                  </View>
+                  <Text style={styles.exploreCuratedEmptyArrow}>→</Text>
+                </Pressable>
+              </View>
             }
           />
         ) : filteredSubjects.length === 0 ? (
@@ -463,6 +520,15 @@ export default function SubjectsScreen() {
         }}
         onDelete={handleDeleteSubject}
       />
+
+      {/* Curated University Templates Library Modal */}
+      <CuratedTemplatesModal
+        visible={isCuratedModalVisible}
+        onClose={() => setIsCuratedModalVisible(false)}
+        onEnrolled={async () => {
+          await fetchSubjects(true);
+        }}
+      />
     </ScreenWrapper>
   );
 }
@@ -516,6 +582,34 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     color: '#94A3B8',
+    fontSize: 13,
+  },
+  headerActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  libraryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(139, 92, 246, 0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+  },
+  libraryBtnPressed: {
+    transform: [{ scale: 0.94 }],
+    opacity: 0.85,
+  },
+  libraryBtnIcon: {
+    fontSize: 14,
+  },
+  libraryBtnText: {
+    color: '#E9D5FF',
+    fontWeight: '700',
     fontSize: 13,
   },
   gradientAddBtn: {
@@ -638,6 +732,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  offlineNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginVertical: Spacing.xs,
+  },
   errorCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -659,5 +763,56 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     paddingBottom: Spacing.xl,
+  },
+  emptyStateWrapper: {
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: Spacing.md,
+  },
+  exploreCuratedEmptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(16, 24, 48, 0.85)',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    padding: 14,
+    width: '100%',
+    maxWidth: 420,
+  },
+  exploreCuratedEmptyBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  exploreCuratedIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exploreCuratedEmptyIcon: {
+    fontSize: 20,
+  },
+  exploreCuratedTextBox: {
+    flex: 1,
+    gap: 2,
+  },
+  exploreCuratedEmptyTitle: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  exploreCuratedEmptySub: {
+    color: '#94A3B8',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  exploreCuratedEmptyArrow: {
+    color: '#C084FC',
+    fontSize: 16,
+    fontWeight: '800',
   },
 });

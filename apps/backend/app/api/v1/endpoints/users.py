@@ -8,6 +8,7 @@ from app.schemas.user import (
     ChangePasswordRequest,
     ChangePasswordResponse,
     DeleteAccountRequest,
+    PushTokenRegisterRequest,
     UserExportData,
     UserPreferencesUpdate,
     UserResponse,
@@ -84,3 +85,20 @@ async def delete_account(
 ) -> MessageResponse:
     """Permanently purges the student account and cascades across all database records and storage."""
     return await user_service.delete_account(db, current_user.id, payload)
+
+
+@router.post(
+    "/me/push-token",
+    response_model=MessageResponse,
+    summary="Register device push token for background notifications",
+)
+async def register_push_token(
+    payload: PushTokenRegisterRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MessageResponse:
+    """Stores student's FCM / Expo push token for background alerts and announcements."""
+    current_user.push_token = payload.push_token.strip()
+    await db.flush()
+    return MessageResponse(message="Push token registered successfully.")
+

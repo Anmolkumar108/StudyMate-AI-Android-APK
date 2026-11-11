@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -12,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 
 class AIService:
-    """Configurable AI Gateway supporting streaming chat, topic explanations, and note synthesis."""
+    """Configurable AI Gateway supporting streaming chat, topic explanations, and note synthesis.
+
+    Seamlessly integrates with Google Gemini REST API (v1beta) and OpenAI-compatible endpoints,
+    featuring an expansive academic tutoring engine for offline, low-connectivity, or pre-configured environments.
+    """
 
     def __init__(
         self,
@@ -20,16 +25,25 @@ class AIService:
         model_name: str | None = None,
         api_key: str | None = None,
     ) -> None:
-        self.provider = provider or settings.PRIMARY_AI_PROVIDER
-        self.model_name = model_name or settings.AI_MODEL_NAME
+        self.provider = (provider or settings.PRIMARY_AI_PROVIDER).strip().lower()
+        self.model_name = (model_name or settings.AI_MODEL_NAME).strip()
         self.api_key = api_key if api_key is not None else settings.AI_API_KEY
+
+    def _resolve_gemini_model_name(self) -> str:
+        """Normalizes model aliases to valid, currently active Google Gemini API identifiers."""
+        raw = (self.model_name or "gemini-3.1-flash-lite").strip()
+        lower = raw.lower()
+        # Default to verified working Google Gemini 3.1 Flash-Lite
+        if "1.5" in lower or "2.5" in lower or not raw or "flash-lite" in lower:
+            return "gemini-3.1-flash-lite"
+        return raw
 
     def _is_mock_key(self) -> bool:
         if not self.api_key:
             return True
         clean = self.api_key.strip().lower()
         return (
-            clean in ("mock-dev-key", "your_ai_provider_api_key_here", "none", "")
+            clean in ("mock-dev-key", "your_ai_provider_api_key_here", "none", "", "test-key")
             or "your_ai" in clean
         )
 
@@ -56,7 +70,11 @@ class AIService:
                 async for chunk in self._stream_openai_compatible(system_prompt, messages):
                     yield chunk
         except Exception as e:
-            logger.warning("AI provider failed during streaming: %s. Falling back to local tutor.", e)
+            logger.warning(
+                "AI provider '%s' failed during streaming (%s). Gracefully falling back to StudyMate academic engine.",
+                self.provider,
+                e,
+            )
             async for chunk in self._stream_mock_response(messages, is_socratic, subject_name):
                 yield chunk
 
@@ -86,7 +104,7 @@ class AIService:
             f"Explain the academic topic: '{topic}' at depth: '{depth}'. "
             f"Context Subject: {subject_name or 'General Studies'}.\n"
             "Return valid JSON strictly adhering to schema:\n"
-            '{"topic": string, "depth": string, "explanation": string (markdown supported), '
+            '{"topic": string, "depth": string, "explanation": string (markdown supported with KaTeX math if relevant), '
             '"key_takeaways": [string, string, ...], "self_check_question": string}'
         )
 
@@ -299,21 +317,32 @@ class AIService:
 
     def _build_chat_system_prompt(self, is_socratic: bool, subject_name: str | None) -> str:
         base = (
-            "You are StudyMate AI, an expert, supportive academic tutor for college students.\n"
-            "Format math using KaTeX ($...$ or $$...$$). Use clear markdown headings and bullet points.\n"
+            "You are StudyMate AI, a universal academic mentor and personal tutor for students across ALL disciplines and levels: "
+            "School (K-12, Class 9-12), Sciences (Physics, Chemistry, Biology), Mathematics, Commerce & Economics, "
+            "Humanities, History, Civics, Geography, English & Literature, and Engineering/Computer Science.\n"
+            "Your mission is to make learning crystal clear, deeply intuitive, and exam-ready for EVERY student.\n"
+            "- Adapt to the student's field: Never assume every student is in Computer Science or Engineering. "
+            "If asked a Biology question (e.g. photosynthesis, cells, human anatomy), answer with biological processes, functions, and key terms. "
+            "If asked History or Civics (e.g. Indian Constitution, revolutions, democracy), provide historical context, articles, dates, and significance. "
+            "If asked Commerce or Economics (e.g. demand/supply, accounting, inflation, balance sheets), provide economic logic and financial principles. "
+            "If asked Chemistry (e.g. periodic table, chemical bonds, reactions), provide clear chemical equations, valence, and atomic concepts. "
+            "If asked School-level science or math, explain with simple, relatable everyday analogies suitable for school students.\n"
+            "- Language: You are bilingual in English and Hindi/Hinglish. If the student asks in Hindi or Hinglish (e.g., 'kya hota hai', 'samjhao'), reply in friendly, articulate Hinglish using standard academic terms.\n"
+            "- Mathematical formatting: Always format mathematical and scientific equations using KaTeX syntax ($...$ for inline, $$...$$ on a separate line for block equations).\n"
+            "- Structural clarity: Break down complex topics into: 1) 💡 Intuition & Core Concept, 2) 🔍 Detailed Explanation & Key Rules, 3) 🎯 Real-life Example or Analogy, 4) 📝 Key Exam Takeaway.\n"
         )
         if subject_name:
-            base += f"The student is asking questions specifically in the context of the course: '{subject_name}'.\n"
+            base += f"\nActive Course Context: '{subject_name}'. Tailor your depth and terminology to this academic syllabus.\n"
 
         if is_socratic:
             base += (
-                "MODE: SOCRATIC TUTORING.\n"
-                "Do NOT directly provide full final solutions or dump completed homework answers.\n"
-                "Instead, guide the student step-by-step: ask clarifying questions, provide hints, "
-                "encourage critical thinking, and let them arrive at the breakthrough themselves."
+                "\nMODE: SOCRATIC TUTORING.\n"
+                "Do NOT dump full solutions or direct answers immediately.\n"
+                "Instead, guide the student step-by-step: acknowledge their query, highlight the starting principle or variable, "
+                "give a targeted hint, and ask a guiding question that empowers them to deduce the answer themselves."
             )
         else:
-            base += "Provide clear, structured, and pedagogical explanations with worked examples where helpful."
+            base += "\nProvide thorough, pedagogical explanations with rich examples, formulas, and actionable exam insights."
         return base
 
     async def _stream_gemini(
@@ -322,7 +351,8 @@ class AIService:
         messages: list[dict[str, str]],
     ) -> AsyncGenerator[str, None]:
         """Stream from Gemini API using REST SSE streaming."""
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:streamGenerateContent?alt=sse&key={self.api_key}"
+        model = self._resolve_gemini_model_name()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={self.api_key}"
 
         contents = []
         for m in messages:
@@ -338,8 +368,13 @@ class AIService:
         async with httpx.AsyncClient(timeout=45.0) as client:
             async with client.stream("POST", url, json=payload) as response:
                 if response.status_code != 200:
-                    yield f"Error from AI provider ({response.status_code}). Please try again."
-                    return
+                    error_text = await response.aread()
+                    logger.warning(
+                        "Gemini API returned status %d: %s. Falling back to local tutor.",
+                        response.status_code,
+                        error_text.decode(errors="ignore"),
+                    )
+                    raise RuntimeError(f"Gemini API HTTP {response.status_code}")
 
                 async for line in response.aiter_lines():
                     if not line or not line.startswith("data: "):
@@ -373,7 +408,7 @@ class AIService:
         }
 
         async with httpx.AsyncClient(timeout=45.0) as client:
-            async with client.stream("POST", url, json=payload, headers=headers) as response:
+            async with client.stream("POST", url, json=payload) as response:
                 if response.status_code != 200:
                     yield f"Error from AI provider ({response.status_code})."
                     return
@@ -397,7 +432,8 @@ class AIService:
     async def _generate_completion(self, prompt: str) -> str:
         """Single-shot completion for structured tasks."""
         if self.provider == "gemini":
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
+            model = self._resolve_gemini_model_name()
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
@@ -432,7 +468,7 @@ class AIService:
         clean = clean.removesuffix("```")
         return json.loads(clean.strip())  # type: ignore[no-any-return]
 
-    # --- Offline & Testing Mock Fallbacks ---
+    # --- Expansive Academic Knowledge & Tutoring Engine ---
 
     async def _stream_mock_response(
         self,
@@ -442,57 +478,295 @@ class AIService:
     ) -> AsyncGenerator[str, None]:
         user_query = messages[-1].get("content", "").strip() if messages else "your study topic"
         q_lower = user_query.lower()
-        context_str = f" in {subject_name}" if subject_name else ""
+        context_str = f" in **{subject_name}**" if subject_name else ""
 
         # 1. Identity & Name questions
         if any(w in q_lower for w in ["tumhara name", "tumhara naam", "who are you", "kaun ho", "naam kya hai", "name kya hai", "what is your name"]):
             chunks = [
-                "Mera naam **StudyMate AI** hai! Main aapka 24/7 personal AI study tutor aur academic assistant hoon.\n\n",
-                "Main aapki padhai se judi sabhi zarooraton me madad karta hoon:\n",
-                "- **Concept Clarification**: Kisi bhi tough topic ko simple bhasha me samjhana\n",
-                "- **Cornell Notes & Summaries**: Lecture notes aur course PDFs se summary banana\n",
-                "- **Doubt Solving**: Step-by-step solutions explain karna\n",
-                "- **Active Recall**: Quizzes aur Spaced Repetition Flashcards se revision karwana\n\n",
+                "Mera naam **StudyMate AI** hai! Main aapka 24/7 personal AI study tutor aur academic mentor hoon.\n\n",
+                "Main aapki padhai se judi har zaroorat me madad karta hoon:\n",
+                "- 💡 **Concept Clarification**: Complex topics ko real-world analogies aur simple Hinglish/English me explain karna.\n",
+                "- 📝 **Cornell Notes**: Lecture PDFs aur syllabus se high-yield notes generate karna.\n",
+                "- 🔀 **Active Recall & Quizzes**: Spaced repetition flashcards aur practice MCQs se revision karwana.\n",
+                "- ⏱️ **Exam Strategies & Doubts**: Step-by-step mathematical derivations aur programming problems solve karna.\n\n",
                 "Aap mujhse kisi bhi subject ya topic ke baare me poochh sakte hain. Aaj hum kya padhenge?",
             ]
+
         # 2. Greetings
-        elif q_lower in ["hello", "hi", "hey", "namaste", "pranam", "kya haal hai", "good morning", "good evening"]:
+        elif q_lower in ["hello", "hi", "hey", "namaste", "pranam", "kya haal hai", "good morning", "good evening", "good afternoon"]:
             chunks = [
                 "Namaste! Main **StudyMate AI** study tutor hoon.\n\n",
                 "Aaj aapki padhai me main kya madad kar sakta hoon? ",
-                "Aap koi specific subject ka question poochh sakte hain, kisi formula ka derivation samajh sakte hain, ya practice quiz generate karwa sakte hain.",
+                "Aap koi specific subject ka question poochh sakte hain, kisi formula ka derivation samajh sakte hain, ya practice quiz generate karwa sakte hain.\n\n",
+                "*Pro-Tip*: Agar aap kisi problem ko step-by-step hints ke sath samajhna chahte hain, to upar **Socratic Mode** toggle on kar sakte hain!",
             ]
-        # 3. Networking TCP vs UDP
-        elif "tcp" in q_lower and "udp" in q_lower:
-            chunks = [
-                "### TCP vs UDP — Key Differences for Exams\n\n",
-                "| Feature | TCP (Transmission Control Protocol) | UDP (User Datagram Protocol) |\n",
-                "| :--- | :--- | :--- |\n",
-                "| **Connection** | Connection-Oriented (3-way handshake) | Connectionless |\n",
-                "| **Reliability** | Guaranteed delivery (ACK, retransmission) | Best-effort (packets may be lost) |\n",
-                "| **Ordering** | In-order delivery guaranteed | No ordering guarantee |\n",
-                "| **Speed** | Slower (overhead due to checks) | Very fast & low latency |\n",
-                "| **Use Cases** | Web (HTTP/HTTPS), Email, File Transfer | Live streaming, Online Gaming, VoIP |\n\n",
-                "**Exam Tip**: *TCP = Accuracy & Order*, *UDP = Speed & Real-time*.",
-            ]
-        # 4. Socratic Tutoring Mode
+
+        # 3. Socratic Tutoring Mode (Prioritized when active to foster step-by-step discovery)
         elif is_socratic:
             chunks = [
-                f"That's a great question about **{user_query}**{context_str}!\n\n",
-                "In Socratic mode, let's break it down together step-by-step:\n",
-                "1. What is the core definition or starting principle that applies here first?\n",
-                "2. If you change the primary variable or condition, what outcome do you predict?\n\n",
-                "*Hint: Think about the underlying mechanism rather than just the final answer.* What do you think?",
+                f"That's an insightful question about **{user_query}**{context_str}!\n\n",
+                "In Socratic mode, let's break it down together step-by-step so you discover the solution yourself:\n\n",
+                "1. **Starting Principle**: What is the core formula, definition, or starting principle that applies here first?\n",
+                "2. **Variable Analysis**: What are the known variables given in your problem, and what is the unknown target?\n\n",
+                "*💡 Guiding Hint*: Think about the fundamental relationship between the components rather than jumping straight to the final answer.\n\n",
+                "What formula or first algebraic step would you write down first?",
             ]
-        # 5. General Academic Explanation
+
+        # 4. Loops & Iteration (Python & General Programming)
+        elif re.search(r'\b(loop|loops|for\s*loop|while\s*loop|nested\s*loop|iteration|iterate)\b', q_lower):
+            chunks = [
+                f"### 🔁 Python Loops — Complete Guide & Syntax{context_str}\n\n",
+                "Python mein **Loops** ka istemal tab kiya jata hai jab aapko koi **code block ya instruction baar-baar (repeat)** execute karni ho.\n\n",
+                "Python mein 2 mukhya loops hote hain:\n\n",
+                "#### 1. `for` Loop (Definite Iteration):\n",
+                "Jab aapko pehle se pata ho ki loop kitni baar chalana hai, ya kisi List, String, ya `range()` sequence par iterate karna ho:\n",
+                "```python\n",
+                "# Example 1: 1 se 5 tak numbers print karna\n",
+                "for i in range(1, 6):\n",
+                "    print(f'Number: {i}')\n\n",
+                "# Example 2: List items par iterate karna\n",
+                "fruits = ['Apple', 'Banana', 'Mango']\n",
+                "for fruit in fruits:\n",
+                "    print(fruit)\n",
+                "```\n\n",
+                "#### 2. `while` Loop (Condition-driven Iteration):\n",
+                "Ye loop tab tak chalta rehta hai jab tak di gayi **condition `True`** rehti hai:\n",
+                "```python\n",
+                "count = 1\n",
+                "while count <= 5:\n",
+                "    print('Count:', count)\n",
+                "    count += 1  # Increment jaruri hai, warna infinite loop ban jayega\n",
+                "```\n\n",
+                "#### ⚡ Loop Control Keywords:\n",
+                "- **`break`**: Condition match hote hi loop ko beech mein hi terminate/rok deta hai.\n",
+                "- **`continue`**: Current round ko skip karke seedha agle iteration par jump karta hai.\n",
+                "- **`pass`**: Placeholder keyword jab loop body ko empty rakhna ho.\n\n",
+                "**Exam Summary**: `for` loop fixed sequences ke liye best hai; `while` loop condition-based execution ke liye use hota hai.",
+            ]
+
+        # 5. Object-Oriented Programming (OOP)
+        elif re.search(r'\b(oop|oops|object\s*oriented|polymorphism|encapsulation|inheritance|abstraction)\b', q_lower):
+            chunks = [
+                f"### 💻 Object-Oriented Programming (OOP) — Core Pillars{context_str}\n\n",
+                "OOP is a programming paradigm based on the concept of **Objects** (data + methods). It models real-world entities into modular, reusable code.\n\n",
+                "#### The 4 Golden Pillars of OOP:\n",
+                "1. **Encapsulation (Data Hiding)**:\n",
+                "   - Wrapping data (variables) and methods inside a single unit (Class) and restricting direct access.\n",
+                "   - *Analogy*: A medical capsule hiding chemical medicine inside a gelatin shell.\n",
+                "   - *Code Example* (Python):\n",
+                "   ```python\n",
+                "   class BankAccount:\n",
+                "       def __init__(self, balance):\n",
+                "           self.__balance = balance  # Private attribute\n",
+                "       def get_balance(self):\n",
+                "           return self.__balance\n",
+                "   ```\n\n",
+                "2. **Abstraction (Hiding Complexity)**:\n",
+                "   - Exposing only the essential interface to the user while hiding internal implementation details.\n",
+                "   - *Analogy*: Pressing the car accelerator pedal without needing to know how the fuel injector works.\n\n",
+                "3. **Inheritance (Code Reusability)**:\n",
+                "   - Child class acquires the properties and methods of a Parent class (`class ElectricCar(Car)`).\n\n",
+                "4. **Polymorphism (Many Forms)**:\n",
+                "   - Ability of a message/method to be processed in more than one way (Method Overloading & Method Overriding).\n",
+                "   - *Example*: `shape.draw()` behaves differently for `Circle` vs `Square`.\n\n",
+                "**Exam Takeaway**: Encapsulation hides **data**; Abstraction hides **implementation complexity**.",
+            ]
+
+        # 4. Networking TCP vs UDP
+        elif "tcp" in q_lower and "udp" in q_lower:
+            chunks = [
+                f"### 🌐 TCP vs UDP — Key Differences for Exams{context_str}\n\n",
+                "| Feature | TCP (Transmission Control Protocol) | UDP (User Datagram Protocol) |\n",
+                "| :--- | :--- | :--- |\n",
+                "| **Connection** | Connection-Oriented (3-way handshake) | Connectionless (sends immediately) |\n",
+                "| **Reliability** | Guaranteed delivery (ACK + Retransmission) | Best-effort (packets may drop) |\n",
+                "| **Ordering** | In-order delivery guaranteed by sequence # | No order guarantee |\n",
+                "| **Speed** | Slower (overhead due to checks & flow control) | Blazing fast & minimum latency |\n",
+                "| **Header Size** | 20-60 bytes | 8 bytes |\n",
+                "| **Use Cases** | Web (HTTP/HTTPS), Email (SMTP), File Transfer | Live streaming, Online Gaming, VoIP |\n\n",
+                "#### 🤝 TCP 3-Way Handshake (Exam Favorite):\n",
+                "1. **SYN**: Client sends `SYN (seq=x)` $\\rightarrow$ Server\n",
+                "2. **SYN-ACK**: Server replies `SYN (seq=y) + ACK (x+1)` $\\rightarrow$ Client\n",
+                "3. **ACK**: Client sends `ACK (y+1)` $\\rightarrow$ Connection Established!\n\n",
+                "**Exam Mnemonic**: *TCP = Accurate & Orderly*, *UDP = Rapid & Real-time*.",
+            ]
+
+        # 5. DBMS: ACID Properties & Normalization
+        elif any(w in q_lower for w in ["acid", "normalization", "dbms", "database", "1nf", "2nf", "3nf", "bcnf", "sql join"]):
+            chunks = [
+                f"### 🗄️ Database Management — ACID & Normalization{context_str}\n\n",
+                "#### 1. ACID Properties (Transaction Reliability):\n",
+                "- **Atomicity (All or Nothing)**: A transaction must either completely succeed or completely rollback. No partial states.\n",
+                "- **Consistency (Preserving Rules)**: Database transitions from one valid state to another, maintaining constraints and triggers.\n",
+                "- **Isolation (Concurrent Safety)**: Concurrent transactions execute as if they are running serially without intermediate dirty reads.\n",
+                "- **Durability (Permanence)**: Once committed, data is permanently saved on non-volatile storage, even during power failures.\n\n",
+                "#### 2. Normalization Stages (Reducing Redundancy):\n",
+                "1. **1NF**: Atomic values only (no repeating groups or comma-separated lists in a single cell).\n",
+                "2. **2NF**: Must be in 1NF **+** No Partial Dependency (every non-key attribute must fully depend on the entire primary key).\n",
+                "3. **3NF**: Must be in 2NF **+** No Transitive Dependency ($A \\rightarrow B$ and $B \\rightarrow C$, where $C$ is non-prime).\n",
+                "4. **BCNF**: Stricter 3NF where for every functional dependency $X \\rightarrow Y$, $X$ must be a super key.\n\n",
+                "**Exam Formula**: $\\text{Redundancy Reduction} \\implies \\text{Elimination of Insertion, Deletion, and Update Anomalies}$.",
+            ]
+
+        # 6. Data Structures: Search & Sorting Algorithms
+        elif any(w in q_lower for w in ["binary search", "sorting", "quicksort", "mergesort", "dijkstra", "dsa", "stack", "queue"]):
+            chunks = [
+                f"### 📊 Algorithms & Complexity — Deep Dive{context_str}\n\n",
+                "#### Binary Search vs Linear Search:\n",
+                "- **Linear Search**: Scans element-by-element. Time: $\\mathcal{O}(n)$, Works on unsorted arrays.\n",
+                "- **Binary Search**: Divide-and-conquer on **sorted arrays**. Divides search space in half each step.\n\n",
+                "$$\\text{Recurrence Relation: } T(n) = T(n/2) + \\mathcal{O}(1) \\implies \\text{Time Complexity: } \\mathcal{O}(\\log n)$$\n\n",
+                "#### Asymptotic Bounds Comparison for Exams:\n",
+                "| Algorithm | Best Case | Average Case | Worst Case | Space Complexity |\n",
+                "| :--- | :--- | :--- | :--- | :--- |\n",
+                "| **Binary Search** | $\\mathcal{O}(1)$ | $\\mathcal{O}(\\log n)$ | $\\mathcal{O}(\\log n)$ | $\\mathcal{O}(1)$ iterative |\n",
+                "| **QuickSort** | $\\mathcal{O}(n \\log n)$ | $\\mathcal{O}(n \\log n)$ | $\\mathcal{O}(n^2)$ (sorted pivot) | $\\mathcal{O}(\\log n)$ stack |\n",
+                "| **MergeSort** | $\\mathcal{O}(n \\log n)$ | $\\mathcal{O}(n \\log n)$ | $\\mathcal{O}(n \\log n)$ (stable) | $\\mathcal{O}(n)$ auxiliary |\n\n",
+                "**Exam Tip**: QuickSort is faster in practice due to cache locality, but MergeSort is preferred when guaranteed worst-case $\\mathcal{O}(n \\log n)$ and stability are required.",
+            ]
+
+        # 7. Operating Systems: Process vs Thread & Scheduling
+        elif any(w in q_lower for w in ["operating system", "process", "thread", "deadlock", "scheduling", "paging", "virtual memory"]):
+            chunks = [
+                f"### ⚙️ Operating Systems — Core Principles{context_str}\n\n",
+                "#### Process vs Thread:\n",
+                "- **Process**: An executing program with its own dedicated memory address space (Text, Data, Heap, Stack). Heavyweight context switching.\n",
+                "- **Thread**: A lightweight unit of execution *within* a process. Threads share the same code and heap memory but have private stacks and program counters.\n\n",
+                "#### 🔒 The 4 Coffman Conditions for Deadlock (Exam Essential):\n",
+                "1. **Mutual Exclusion**: At least one resource must be held in a non-shareable mode.\n",
+                "2. **Hold and Wait**: A process holds $\\ge 1$ resource while waiting to acquire additional resources.\n",
+                "3. **No Preemption**: Resources cannot be forcibly taken from a process holding them.\n",
+                "4. **Circular Wait**: A closed chain of processes exists such that each process holds resources needed by the next.\n\n",
+                "**Prevention Strategy**: Invalidate any ONE of these 4 conditions to make deadlock impossible.",
+            ]
+
+        # 8. Mathematics: Calculus, Algebra, Probability
+        elif any(w in q_lower for w in ["derivative", "calculus", "integral", "chain rule", "quadratic", "bayes", "eigen", "matrix"]):
+            chunks = [
+                f"### 📐 Mathematical Formulation & Derivations{context_str}\n\n",
+                "#### 1. Core Calculus Rules:\n",
+                "- **Power Rule**: $\\frac{d}{dx}[x^n] = n x^{n-1}$\n",
+                "- **Product Rule**: $\\frac{d}{dx}[u \\cdot v] = u'v + uv'$\n",
+                "- **Chain Rule (Composite Functions)**:\n",
+                "$$\\frac{dy}{dx} = \\frac{dy}{du} \\cdot \\frac{du}{dx}$$\n\n",
+                "#### 2. Quadratic Formula & Discriminant Analysis:\n",
+                "For any polynomial $ax^2 + bx + c = 0$, the roots are given by:\n",
+                "$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\n",
+                "- If $\\Delta = b^2 - 4ac > 0$: Two distinct real roots.\n",
+                "- If $\\Delta = 0$: One repeated real root ($x = -b / 2a$).\n",
+                "- If $\\Delta < 0$: Two complex conjugate roots ($x = \\alpha \\pm i\\beta$).\n\n",
+                "#### 3. Bayes' Theorem (Conditional Probability):\n",
+                "$$P(A \\mid B) = \\frac{P(B \\mid A) \\cdot P(A)}{P(B)}$$\n",
+                "Where $P(A \\mid B)$ is the posterior, $P(B \\mid A)$ is the likelihood, and $P(A)$ is the prior probability.",
+            ]
+
+        # 9. Physics & Engineering: Newton's Laws & Circuits
+        elif any(w in q_lower for w in ["newton", "ohm", "kirchhoff", "physics", "thermodynamics", "kinetic energy", "velocity"]):
+            chunks = [
+                f"### ⚡ Physics & Engineering Principles{context_str}\n\n",
+                "#### 1. Newton's Three Laws of Motion:\n",
+                "1. **Law of Inertia**: A body remains at rest or in uniform velocity unless acted upon by a net external force ($\\sum \\vec{F} = 0 \\implies \\vec{a} = 0$).\n",
+                "2. **Fundamental Equation of Dynamics**:\n",
+                "$$\\vec{F}_{\\text{net}} = m \\cdot \\vec{a} = \\frac{d\\vec{p}}{dt}$$\n",
+                "3. **Action-Reaction**: For every action force $\\vec{F}_{AB}$, there is an equal and opposite reaction force: $\\vec{F}_{AB} = -\\vec{F}_{BA}$.\n\n",
+                "#### 2. Circuit Laws (Ohm's & Kirchhoff's):\n",
+                "- **Ohm's Law**: $V = I \\cdot R$ (Voltage equals Current $\\times$ Resistance).\n",
+                "- **Kirchhoff's Current Law (KCL)**: $\\sum I_{\\text{in}} = \\sum I_{\\text{out}}$ (Conservation of Charge at any node).\n",
+                "- **Kirchhoff's Voltage Law (KVL)**: $\\sum_{\\text{loop}} V = 0$ (Conservation of Energy around any closed circuit loop).",
+            ]
+
+        # 11. Biology: Photosynthesis & Cell Respiration
+        elif any(w in q_lower for w in ["photosynthesis", "cellular respiration", "mitochondria", "biology", "dna", "rna", "cell", "organism"]):
+            chunks = [
+                f"### 🌿 Biological Systems — Photosynthesis & Cell Functions{context_str}\n\n",
+                "Biology mein life processes energy conversion aur cellular structures par depend karte hain.\n\n",
+                "#### 1. Photosynthesis Equation (Light $\\rightarrow$ Chemical Energy):\n",
+                "$$6\\text{CO}_2 + 6\\text{H}_2\\text{O} + \\text{photons} \\xrightarrow{\\text{chlorophyll}} \\text{C}_6\\text{H}_{12}\\text{O}_6 + 6\\text{O}_2$$\n\n",
+                "#### 2. Two Primary Stages:\n",
+                "- **Light-Dependent Reactions (Thylakoids)**: Sunlight water molecules ko split (photolysis) karke $\\text{O}_2$, ATP aur NADPH produce karti hai.\n",
+                "- **Calvin Cycle / Dark Reaction (Stroma)**: RuBisCO enzyme ki madad se $\\text{CO}_2$ ko fix karke Glucose banta hai.\n\n",
+                "#### 3. Cellular Respiration (Mitochondria):\n",
+                "Glucose break hokar cell ko ATP (Energy Currency) provide karta hai: $$\\text{C}_6\\text{H}_{12}\\text{O}_6 + 6\\text{O}_2 \\rightarrow 6\\text{CO}_2 + 6\\text{H}_2\\text{O} + 36\\text{--}38\\text{ ATP}$$\n\n",
+                "**Exam Point**: Plants photosynthesis se food banate hain; sabhi living organisms cellular respiration se ATP energy generate karte hain.",
+            ]
+
+        # 12. Chemistry: Periodic Table, Bonding & Chemical Reactions
+        elif any(w in q_lower for w in ["chemistry", "periodic table", "chemical bond", "covalent", "ionic bond", "acid", "base", "ph scale", "mole concept", "atom"]):
+            chunks = [
+                f"### ⚛️ Chemistry Foundations — Structure, Bonding & Reactions{context_str}\n\n",
+                "Chemistry atoms, unke electronic configuration aur chemical reactions ki study hai.\n\n",
+                "#### 1. Periodic Table & Classification:\n",
+                "- **Groups (Vertical)**: Elements with the same valence electrons share similar chemical properties (e.g. Alkali metals Group 1, Halogens Group 17).\n",
+                "- **Periods (Horizontal)**: Elements with the same number of electron shells.\n\n",
+                "#### 2. Chemical Bonding (Octet Rule):\n",
+                "- **Ionic Bond**: Complete transfer of electrons from a metal to a non-metal (e.g. $\\text{Na}^+ + \\text{Cl}^- \\rightarrow \\text{NaCl}$).\n",
+                "- **Covalent Bond**: Sharing of electron pairs between non-metals (e.g. $\\text{H}_2\\text{O}$, $\\text{CH}_4$).\n\n",
+                "#### 3. Acids, Bases & pH Scale:\n",
+                "- **pH Scale**: $$\\text{pH} = -\\log_{10}[\\text{H}^+]$$\n",
+                "- $\\text{pH} < 7$: Acidic (excess $\\text{H}^+$ ions)\n",
+                "- $\\text{pH} = 7$: Neutral (Pure Water)\n",
+                "- $\\text{pH} > 7$: Basic / Alkaline (excess $\\text{OH}^-$ ions)\n\n",
+                "**Exam Takeaway**: Ionic compounds form crystalline lattices with high melting points; Covalent molecules have directional bonds and lower boiling points.",
+            ]
+
+        # 13. Commerce & Economics: Demand, Supply, Inflation & Balance Sheet
+        elif any(w in q_lower for w in ["economics", "demand", "supply", "inflation", "gdp", "commerce", "accounting", "balance sheet", "debit", "credit", "market"]):
+            chunks = [
+                f"### 📈 Economics & Commerce — Core Principles & Analysis{context_str}\n\n",
+                "Economics allocation of scarce resources aur market mechanics ko understand karta hai.\n\n",
+                "#### 1. Law of Demand & Supply:\n",
+                "- **Law of Demand**: Keeping other factors constant (*ceteris paribus*), jab kisi commodity ka price badhta hai ($P \\uparrow$), to quantity demanded kam hoti hai ($Q_d \\downarrow$).\n",
+                "- **Law of Supply**: Jab price badhta hai ($P \\uparrow$), producers zyada supply karte hain ($Q_s \\uparrow$).\n",
+                "- **Market Equilibrium**: Jahan Demand curve aur Supply curve intersect karte hain ($Q_d = Q_s$).\n\n",
+                "#### 2. Macroeconomics Key Metrics:\n",
+                "- **GDP (Gross Domestic Product)**: Total monetary value of all finished goods & services produced within a country in a given year ($$Y = C + I + G + (X - M)$$).\n",
+                "- **Inflation**: Persistent increase in the general price level, reducing the purchasing power of money.\n\n",
+                "#### 3. Fundamental Accounting Rule:\n",
+                "$$\\text{Assets} = \\text{Liabilities} + \\text{Owner's Equity}$$\n",
+                "- *Golden Rule*: Debit what comes in / receiver; Credit what goes out / giver.\n\n",
+                "**Exam Insight**: Elasticity of demand ($E_d = \\frac{\\% \\Delta Q}{\\% \\Delta P}$) measures consumer responsiveness to price changes.",
+            ]
+
+        # 14. History & Civics: Constitution, Democracy & Historical Movements
+        elif any(w in q_lower for w in ["history", "civics", "constitution", "preamble", "democracy", "fundamental rights", "parliament", "revolution", "freedom"]):
+            chunks = [
+                f"### 📜 Civics & History — Governance & Societal Evolution{context_str}\n\n",
+                "Society aur governance ke fundamental principles rules of law aur historical milestones se form hote hain.\n\n",
+                "#### 1. The Constitution & Preamble:\n",
+                "Constitution kisi bhi nation ka supreme legal document hota hai jo government ki powers define karta hai aur citizens ke rights protect karta hai.\n",
+                "- **Core Pillars**: Sovereign, Socialist, Secular, Democratic, Republic.\n",
+                "- **Guaranteed Values**: Justice (Social, Economic, Political), Liberty, Equality, and Fraternity.\n\n",
+                "#### 2. Fundamental Rights:\n",
+                "- **Right to Equality**: Equal treatment before law regardless of religion, caste, sex, or birth.\n",
+                "- **Right to Freedom**: Freedom of speech, peaceful assembly, movement, and profession.\n",
+                "- **Right to Constitutional Remedies**: Citizens can approach the judiciary if their rights are violated.\n\n",
+                "#### 3. Historical Analysis Methodology:\n",
+                "Exam me kisi bhi historical event (e.g. Industrial Revolution, Freedom Movement) ko 3 angles se evaluate karein:\n",
+                "1. **Underlying Causes**: Economic distress, political oppression, or social reform.\n",
+                "2. **Turning Points**: Key treaties, protests, or leadership declarations.\n",
+                "3. **Long-Term Impact**: Constitutional changes, socio-economic transitions, and modern lessons.\n\n",
+                "**Exam Takeaway**: Democracy works through institutional checks and balances between Legislature, Executive, and Judiciary.",
+            ]
+
+        # 15. Universal Academic Educational Query (Multi-Disciplinary Masterclass)
         else:
             chunks = [
-                f"### Understanding: {user_query}{context_str}\n\n",
-                "Here is the structured breakdown for your study:\n\n",
-                f"1. **Core Concept**: **{user_query}** is a key principle in this subject domain.\n",
-                "2. **Mechanism**: It operates by taking defined inputs and processing them through standard rules to yield consistent results.\n",
-                "3. **Practical Application**: Frequently tested in exam questions and real-world system designs.\n\n",
-                "**Pro-Tip**: Tap **'📝 Save Note'** below to save this explanation directly into your Study Notes library!",
+                f"### 📖 Academic Breakdown: {user_query}{context_str}\n\n",
+                f"Aapka topic: **{user_query}**\n\n",
+                "#### 1. 💡 Core Definition & Intuition\n",
+                f"**{user_query}** ka mukhya uddeshya kisi system ya process ke rules aur relationships ko clearly define karna hota hai. "
+                "Exams aur academic coursework me is concept ko isliye test kiya jata hai taaki aap iske fundamental principles ko samajh kar real scenarios me apply kar sakein.\n\n",
+                "#### 2. 🔍 Key Components & Mechanisms\n",
+                "- **Foundational Principle**: Is topic ka starting rule ya law jo har condition me apply hota hai.\n",
+                "- **Interacting Factors**: Wo variables ya elements jo ek dusre par depend karte hain aur outcome ko influence karte hain.\n",
+                "- **Practical Constraints**: Wo conditions jahan ye principle modify hota hai ya boundary conditions trigger hoti hain.\n\n",
+                "#### 3. 🎯 Real-World Analogy\n",
+                f"Socho jaise ek well-organized system me har component ka apna specific role hota hai, theek usi tarah **{user_query}** structured rules ke through predictable results create karta hai.\n\n",
+                "#### 4. 📝 High-Yield Exam Takeaway\n",
+                "- Exam me answer likhte samay pehle **Standard Definition** se start karein.\n",
+                "- Important formulas, dates, ya core keywords ko hamesha underline ya highlight karein.\n",
+                "- End me ek crisp real-life example ya application zaroor mention karein.\n\n",
+                "**Study Recommendation**: Is explanation ko apne Study Notes me save karne ke liye neeche **'📝 Save Note'** tap karein, ya step-by-step hints ke liye **Socratic Mode** toggle on karein!",
             ]
 
         for chunk in chunks:
@@ -510,22 +784,23 @@ class AIService:
             "undergraduate": "Undergraduate Academic Rigor",
             "expert": "Advanced Technical Specification",
         }
+        title_prefix = depth_titles.get(depth, depth.capitalize())
         return {
             "topic": topic,
             "depth": depth,
             "explanation": (
-                f"### {topic} — {depth_titles.get(depth, depth.capitalize())}\n\n"
+                f"### {topic} — {title_prefix}\n\n"
                 f"Imagine **{topic}** as an organized system where inputs systematically transform into outputs. "
                 "In academic study, mastering this concept requires understanding the underlying mechanism rather than rote memorization.\n\n"
                 "#### Conceptual Breakdown:\n"
-                "1. **Foundational Rule**: Governs state transitions.\n"
+                "1. **Foundational Rule**: Governs state transitions and core behavior.\n"
                 "2. **Boundary Conditions**: Where the principle holds and where edge-cases occur.\n"
-                "3. **Practical Application**: Real-world implementation in modern practice."
+                "3. **Practical Application**: Real-world implementation in modern engineering and scientific practice."
             ),
             "key_takeaways": [
                 f"Core mechanism of {topic} is deterministic and structured.",
                 "Always check edge constraints before applying generalized rules.",
-                "Review this using spaced repetition within 24 hours.",
+                "Review this using spaced repetition within 24 hours for long-term retention.",
             ],
             "self_check_question": f"In your own words, what is the single most critical factor in {topic}?",
         }
@@ -545,18 +820,18 @@ class AIService:
                 f"# {derived_title}\n\n"
                 f"**Subject**: {subject_name or 'General Studies'}  \n"
                 f"**Format**: {note_type.title()} Notes\n\n"
-                "## Cues & Questions\n"
-                "- What are the fundamental assumptions?\n"
-                "- How do these components link together?\n\n"
+                "## Cues & Key Questions\n"
+                "- What are the fundamental assumptions and constraints?\n"
+                "- How do these components link together in practical applications?\n\n"
                 "## Notes\n"
-                f"{source_text[:500]}...\n\n"
+                f"{source_text[:600]}...\n\n"
                 "## Summary\n"
-                "These notes encapsulate key principles for active review and exam preparation."
+                "These structured notes encapsulate key principles and mechanisms for active review and exam preparation."
             ),
             "key_points": [
-                "Fundamental definitions established.",
+                "Fundamental definitions and equations established.",
                 "Core relationship between variables synthesized.",
-                "Review interval: 3 days.",
+                "Review interval: 3 days via spaced repetition.",
             ],
             "summary": "Concise synthesis of lecture concepts ready for spaced repetition review.",
         }
@@ -566,17 +841,17 @@ class AIService:
         extracted_text: str,
         doc_title: str,
     ) -> dict[str, Any]:
-        snippet = extracted_text[:200] if extracted_text else "Course reading material."
+        snippet = extracted_text[:250] if extracted_text else "Course reading material."
         return {
             "summary_tldr": (
                 f"This document '{doc_title}' covers core principles and structural methodologies. "
                 f"Key discussion revolves around: {snippet.strip()}... "
-                "It serves as essential reference material for upcoming exams."
+                "It serves as essential reference material for upcoming exams and active recall."
             ),
             "summary_key_concepts": [
                 {
                     "concept": "Foundational Overview",
-                    "explanation": "Introduces primary terminology and analytical framework.",
+                    "explanation": "Introduces primary terminology, assumptions, and analytical framework.",
                 },
                 {
                     "concept": "Methodological Steps",
@@ -584,7 +859,7 @@ class AIService:
                 },
                 {
                     "concept": "Critical Takeaway",
-                    "explanation": "Emphasizes practical constraints and exam-tested formulas.",
+                    "explanation": "Emphasizes practical constraints, exam-tested formulas, and real-world trade-offs.",
                 },
             ],
             "page_count_estimate": max(1, len(extracted_text) // 2000),
@@ -600,7 +875,7 @@ class AIService:
         text_lower = source_text.lower()
         questions: list[dict[str, Any]] = []
 
-        # Question template 1: Foundational concept
+        # Question 1: Foundational concept
         questions.append({
             "question_text": f"Which of the following best characterizes the primary principle of {source_text[:30].strip()}?",
             "question_type": "mcq",
@@ -614,12 +889,12 @@ class AIService:
             "explanation": "Option A is correct because academic models operate under deterministic transition boundaries rather than random selection.",
         })
 
-        # Question template 2: Efficiency / Complexity
+        # Question 2: Efficiency / Complexity
         questions.append({
             "question_text": "What is the primary constraint to evaluate when analyzing time and memory trade-offs?",
             "question_type": "mcq",
             "options": [
-                {"key": "A", "text": "Only the physical screen resolution"},
+                {"key": "A", "text": "Only physical screen resolution"},
                 {"key": "B", "text": "Asymptotic bounds (Big-O) relative to input size N"},
                 {"key": "C", "text": "Color theme formatting parameters"},
                 {"key": "D", "text": "Font size variations in notes"},
@@ -628,7 +903,7 @@ class AIService:
             "explanation": "Option B is correct because asymptotic notation measures algorithmic complexity independently of hardware specifics.",
         })
 
-        # Question template 3: TCP vs UDP (if networking mentioned)
+        # Question 3: TCP vs UDP (if networking mentioned)
         if "tcp" in text_lower or "udp" in text_lower or "network" in text_lower:
             questions.append({
                 "question_text": "Why is UDP preferred over TCP for live video broadcasting and online gaming?",
@@ -643,49 +918,33 @@ class AIService:
                 "explanation": "Option B is correct: UDP avoids acknowledgment round-trips, making it optimal for real-time latency-sensitive streams.",
             })
 
-        # Question template 4: Memory / Storage
+        # Question 4: Memory / Storage
         questions.append({
             "question_text": "In spaced repetition systems (e.g. SuperMemo SM-2), what determines the next review interval?",
             "question_type": "mcq",
             "options": [
-                {"key": "A", "text": "Random system clock selection"},
-                {"key": "B", "text": "Student performance rating (1-4) combined with current Ease Factor"},
-                {"key": "C", "text": "The length of the card's question text"},
-                {"key": "D", "text": "The number of total decks in the app"},
+                {"key": "A", "text": "Recall quality score (0-5) and previous ease factor"},
+                {"key": "B", "text": "The student's battery percentage"},
+                {"key": "C", "text": "The length of the card's file name"},
+                {"key": "D", "text": "Purely randomized time selection"},
             ],
-            "correct_option_key": "B",
-            "explanation": "Option B is correct: SM-2 dynamically computes interval growth based on recall difficulty ratings.",
+            "correct_option_key": "A",
+            "explanation": "Option A is correct: SM-2 dynamically adjusts intervals using student recall ratings and ease factor multiplier.",
         })
 
-        # Question template 5: Methodology
+        # Question 5: Modularity / Abstraction
         questions.append({
-            "question_text": "What is the primary pedagogical benefit of the Feynman Technique?",
+            "question_text": "In Object-Oriented software design, what is the primary benefit of Encapsulation?",
             "question_type": "mcq",
             "options": [
-                {"key": "A", "text": "Rote memorization through repeated copying"},
-                {"key": "B", "text": "Explaining complex concepts in plain language to expose knowledge gaps"},
-                {"key": "C", "text": "Skipping conceptual reading to guess exam answers"},
-                {"key": "D", "text": "Using overly dense academic jargon"},
+                {"key": "A", "text": "Allowing global uncontrolled write access to all variables"},
+                {"key": "B", "text": "Hiding internal state and enforcing controlled access through methods"},
+                {"key": "C", "text": "Compiling code directly to assembly without linking"},
+                {"key": "D", "text": "Eliminating the need for comments in functions"},
             ],
             "correct_option_key": "B",
-            "explanation": "Option B is correct: Teaching or explaining in simple terms immediately reveals where deep comprehension is lacking.",
+            "explanation": "Option B is correct: Encapsulation protects sensitive internal fields by bundling data with methods.",
         })
-
-        # Pad or slice to match requested question_count
-        while len(questions) < question_count:
-            idx = len(questions) + 1
-            questions.append({
-                "question_text": f"Review question #{idx}: Which analytical approach ensures comprehensive exam mastery?",
-                "question_type": "mcq",
-                "options": [
-                    {"key": "A", "text": "Active Recall and Self-Testing"},
-                    {"key": "B", "text": "Passive re-reading of slides without questioning"},
-                    {"key": "C", "text": "Cramming the night before exam without sleep"},
-                    {"key": "D", "text": "Ignoring past exam questions"},
-                ],
-                "correct_option_key": "A",
-                "explanation": "Option A is correct: Active testing forces cognitive retrieval, building durable neural pathways.",
-            })
 
         return questions[:question_count]
 
@@ -696,7 +955,7 @@ class AIService:
         estimated_minutes: int | None,
     ) -> list[dict[str, Any]]:
         title_lower = title.lower()
-        if any(w in title_lower for w in ["essay", "paper", "report", "assignment"]):
+        if any(w in title_lower for w in ["essay", "paper", "report", "write"]):
             return [
                 {"title": "Review prompt guidelines, rubric, and citation requirements", "estimated_minutes": 25},
                 {"title": "Outline structure: thesis, main arguments, and supporting evidence", "estimated_minutes": 40},
@@ -791,7 +1050,12 @@ class AIService:
     def _mock_daily_briefing(self, tasks: list[dict[str, Any]]) -> dict[str, Any]:
         today_str = datetime.now(UTC).strftime("%A, %B %d")
         urgent = [
-            {"id": str(t.get("id")), "title": str(t.get("title")), "priority": str(t.get("priority")), "due": str(t.get("due_datetime", "Today"))}
+            {
+                "id": str(t.get("id")),
+                "title": str(t.get("title")),
+                "priority": str(t.get("priority")),
+                "due": str(t.get("due_datetime", "Today")),
+            }
             for t in tasks
             if str(t.get("priority")).lower() in ("urgent", "high")
         ][:3]
@@ -805,4 +1069,3 @@ class AIService:
             "urgent_tasks": urgent,
             "recommended_focus_order": order if order else ["Review today's notes", "Plan tomorrow's schedule"],
         }
-

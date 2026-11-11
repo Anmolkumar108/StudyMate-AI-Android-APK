@@ -51,6 +51,12 @@ class DeleteAccountRequest(BaseModel):
     reason: str | None = None
 
 
+class PushTokenRegisterRequest(BaseModel):
+    push_token: str
+    platform: str = "android"
+    device_name: str | None = None
+
+
 class UserExportData(BaseModel):
     exported_at: datetime
     export_version: str = "1.0"

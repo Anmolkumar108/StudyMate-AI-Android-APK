@@ -100,6 +100,7 @@ export function FlashcardFlipCard({
 
         <ScrollView
           showsVerticalScrollIndicator={false}
+          nestedScrollEnabled={true}
           contentContainerStyle={styles.textContainer}>
           <ThemedText type="headlineMedium" style={styles.mainText}>
             {card.question}
@@ -141,6 +142,7 @@ export function FlashcardFlipCard({
 
         <ScrollView
           showsVerticalScrollIndicator={false}
+          nestedScrollEnabled={true}
           contentContainerStyle={styles.textContainer}>
           <ThemedText
             type="bodyLarge"
@@ -168,8 +170,8 @@ export function FlashcardFlipCard({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    height: 380,
-    marginVertical: Spacing.md,
+    height: 290,
+    marginVertical: Spacing.xs,
     alignSelf: 'center',
     maxWidth: 500,
   },
@@ -179,14 +181,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xl,
     borderWidth: 1.5,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     justifyContent: 'space-between',
     backfaceVisibility: 'hidden',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 3,
   },
@@ -197,20 +199,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   textContainer: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   mainText: {
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 26,
   },
   cardFooter: {
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.xs,
     borderTopWidth: 1,
     alignItems: 'center',
   },

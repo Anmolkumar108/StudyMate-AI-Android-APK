@@ -38,7 +38,7 @@ export function DeckCard({
   const theme = useTheme();
 
   const [opacityAnim] = useState(() => new Animated.Value(0));
-  const [translateYAnim] = useState(() => new Animated.Value(8));
+  const [translateYAnim] = useState(() => new Animated.Value(12));
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled()
@@ -49,17 +49,18 @@ export function DeckCard({
           return;
         }
 
-        const delay = Math.min(index * 35, 200);
+        const delay = Math.min(index * 40, 220);
         Animated.parallel([
           Animated.timing(opacityAnim, {
             toValue: 1,
-            duration: 220,
+            duration: 240,
             delay,
             useNativeDriver: true,
           }),
-          Animated.timing(translateYAnim, {
+          Animated.spring(translateYAnim, {
             toValue: 0,
-            duration: 220,
+            friction: 7,
+            tension: 50,
             delay,
             useNativeDriver: true,
           }),
@@ -86,9 +87,18 @@ export function DeckCard({
         onPress={onPress}
         accessibilityLabel={`Deck: ${deck.title}, ${deck.card_count} cards`}
         accessibilityHint="Opens deck details and card study workspace"
-        style={styles.cardContainer}>
-        {/* Left Color Accent Bar */}
-        <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
+        style={[
+          styles.cardContainer,
+          {
+            borderColor: accentColor + '33',
+            shadowColor: accentColor,
+          },
+        ]}>
+        {/* Left Glowing Accent Capsule Indicator */}
+        <View style={styles.accentBarWrapper}>
+          <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
+          <View style={[styles.accentGlowDot, { backgroundColor: accentColor }]} />
+        </View>
 
         <View style={styles.cardContent}>
           {/* Header Row: Badges & Action Menu */}
@@ -99,21 +109,22 @@ export function DeckCard({
                   style={[
                     styles.subjectBadge,
                     {
-                      backgroundColor: (subjectColor || theme.brandPrimary) + '1F',
-                      borderColor: (subjectColor || theme.brandPrimary) + '40',
+                      backgroundColor: accentColor + '18',
+                      borderColor: accentColor + '44',
                     },
                   ]}>
                   <View
                     style={[
                       styles.subjectDot,
-                      { backgroundColor: subjectColor || theme.brandPrimary },
+                      { backgroundColor: accentColor },
                     ]}
                   />
                   <ThemedText
                     type="smallBold"
                     style={{
-                      color: subjectColor || theme.brandPrimary,
+                      color: accentColor,
                       fontSize: 11,
+                      letterSpacing: 0.3,
                     }}>
                     {subjectName}
                   </ThemedText>
@@ -121,10 +132,32 @@ export function DeckCard({
               ) : null}
 
               <Badge
-                label={`${deck.card_count} ${deck.card_count === 1 ? 'card' : 'cards'}`}
+                label={`🎴 ${deck.card_count} ${deck.card_count === 1 ? 'card' : 'cards'}`}
                 variant={hasCards ? 'brand' : 'neutral'}
                 size="sm"
               />
+
+              {hasCards ? (
+                <View
+                  style={[
+                    styles.activeRecallChip,
+                    {
+                      backgroundColor: theme.brandPrimary + '14',
+                      borderColor: theme.brandPrimary + '26',
+                    },
+                  ]}>
+                  <Text style={{ fontSize: 9 }}>⚡</Text>
+                  <ThemedText
+                    type="small"
+                    style={{
+                      color: theme.brandPrimary,
+                      fontSize: 10,
+                      fontWeight: '600',
+                    }}>
+                    Recall Ready
+                  </ThemedText>
+                </View>
+              ) : null}
             </View>
 
             {/* Quick Action Icons */}
@@ -139,7 +172,12 @@ export function DeckCard({
                   accessibilityLabel="Edit deck details"
                   style={({ pressed }) => [
                     styles.iconButton,
-                    { opacity: pressed ? 0.7 : 1 },
+                    {
+                      backgroundColor: theme.inputBackground,
+                      borderColor: theme.borderSubtle,
+                      opacity: pressed ? 0.7 : 1,
+                      transform: [{ scale: pressed ? 0.92 : 1 }],
+                    },
                   ]}>
                   <Text style={[styles.actionIcon, { color: theme.textSecondary }]}>
                     ✏️
@@ -157,7 +195,12 @@ export function DeckCard({
                   accessibilityLabel="Delete deck"
                   style={({ pressed }) => [
                     styles.iconButton,
-                    { opacity: pressed ? 0.7 : 1 },
+                    {
+                      backgroundColor: theme.inputBackground,
+                      borderColor: theme.statusDanger + '30',
+                      opacity: pressed ? 0.7 : 1,
+                      transform: [{ scale: pressed ? 0.92 : 1 }],
+                    },
                   ]}>
                   <Text style={[styles.actionIcon, { color: theme.statusDanger }]}>
                     🗑️
@@ -168,9 +211,11 @@ export function DeckCard({
           </View>
 
           {/* Deck Title */}
-          <ThemedText type="headlineMedium" numberOfLines={2} style={styles.title}>
-            {deck.title}
-          </ThemedText>
+          <View style={styles.titleRow}>
+            <ThemedText type="headlineMedium" numberOfLines={2} style={styles.title}>
+              {deck.title}
+            </ThemedText>
+          </View>
 
           {/* Optional Description */}
           {deck.description ? (
@@ -188,11 +233,14 @@ export function DeckCard({
               styles.footerRow,
               { borderTopColor: theme.borderSubtle },
             ]}>
-            <ThemedText
-              type="small"
-              style={{ color: theme.textTertiary }}>
-              {hasCards ? 'Tap to view or study' : 'Add cards to begin studying'}
-            </ThemedText>
+            <View style={styles.footerLeft}>
+              <Text style={{ fontSize: 13 }}>{hasCards ? '🎯' : '💡'}</Text>
+              <ThemedText
+                type="small"
+                style={{ color: theme.textTertiary, flexShrink: 1 }}>
+                {hasCards ? 'Tap to view or study' : 'Add cards to begin studying'}
+              </ThemedText>
+            </View>
 
             {hasCards && onStudyPress ? (
               <Pressable
@@ -207,6 +255,7 @@ export function DeckCard({
                   {
                     backgroundColor: theme.brandPrimary,
                     opacity: pressed ? 0.85 : 1,
+                    transform: [{ scale: pressed ? 0.95 : 1 }],
                   },
                 ]}>
                 <ThemedText type="smallBold" style={styles.studyPillText}>
@@ -226,14 +275,36 @@ const styles = StyleSheet.create({
     padding: 0,
     overflow: 'hidden',
     flexDirection: 'row',
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.2,
+    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+  },
+  accentBarWrapper: {
+    width: 6,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
   },
   accentBar: {
-    width: 5,
-    alignSelf: 'stretch',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    opacity: 0.85,
+  },
+  accentGlowDot: {
+    width: 6,
+    height: 14,
+    borderRadius: 3,
   },
   cardContent: {
     flex: 1,
-    padding: Spacing.cardPadding,
+    padding: Spacing.md,
     gap: Spacing.xs,
   },
   headerRow: {
@@ -245,7 +316,7 @@ const styles = StyleSheet.create({
   badgeGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: 6,
     flexWrap: 'wrap',
     flex: 1,
   },
@@ -255,7 +326,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
   subjectDot: {
@@ -263,22 +334,41 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
+  activeRecallChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: BorderRadius.xs,
+    borderWidth: 1,
+  },
   actionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 6,
   },
   iconButton: {
     width: MinTouchTarget,
     height: MinTouchTarget,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionIcon: {
-    fontSize: 16,
+    fontSize: 14,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
   },
   title: {
-    marginTop: 2,
+    fontWeight: '700',
+    fontSize: 18,
+    lineHeight: 23,
+    letterSpacing: -0.2,
   },
   description: {
     lineHeight: 18,
@@ -291,14 +381,28 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     paddingTop: Spacing.sm,
     borderTopWidth: 1,
+    gap: Spacing.sm,
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
   },
   studyPill: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 7,
     borderRadius: BorderRadius.full,
+    elevation: 2,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   studyPillText: {
     color: '#FFFFFF',
     fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

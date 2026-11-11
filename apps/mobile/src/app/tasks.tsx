@@ -27,6 +27,7 @@ import {
   sendImmediateNotification,
   snoozeTaskReminder,
 } from '@/services/notifications';
+import { offlineSyncManager } from '@/services/offline-sync-manager';
 import {
   applyPendingActionsToTasks,
   clearPendingActions,
@@ -136,24 +137,14 @@ export default function TasksScreen() {
   const [naturalPrompt, setNaturalPrompt] = useState('');
 
   // Initial Fetch & Offline Cache Sync
-  const fetchTasks = async () => {
+  const fetchTasks = async (syncFirst = false) => {
     setIsLoading(true);
     try {
-      // Sync any offline queued actions first
-      const pending = await loadPendingActions();
-      if (pending.length > 0) {
-        for (const action of pending) {
-          try {
-            if (action.type === 'toggle_status' && action.taskId) {
-              await taskApi.toggleComplete(action.taskId, 'todo');
-            } else if (action.type === 'delete_task' && action.taskId) {
-              await taskApi.delete(action.taskId);
-            }
-          } catch {
-            // Keep going
-          }
+      if (syncFirst) {
+        const counts = await offlineSyncManager.getPendingCount();
+        if (counts.tasks > 0) {
+          await offlineSyncManager.syncAllPending();
         }
-        await clearPendingActions();
       }
 
       const [taskRes, subList] = await Promise.all([
@@ -175,7 +166,7 @@ export default function TasksScreen() {
         focusMins: totalFocus,
       });
     } catch {
-      // Fallback to offline cached data
+      // Fallback to offline cached data with pending actions overlaid
       setIsOffline(true);
       const cached = await loadCachedTasks();
       const pending = await loadPendingActions();
@@ -231,9 +222,35 @@ export default function TasksScreen() {
   useEffect(() => {
     registerForPushNotificationsAsync();
     const timer = setTimeout(() => {
-      fetchTasks();
+      fetchTasks(true);
     }, 0);
-    return () => clearTimeout(timer);
+
+    const unsubscribe = offlineSyncManager.subscribe((syncState) => {
+      if (syncState.status === 'success') {
+        // Hydrate from cached tasks without triggering another sync loop
+        loadCachedTasks().then((cached) => {
+          loadPendingActions().then((pending) => {
+            const updated = applyPendingActionsToTasks(cached, pending);
+            if (updated.length > 0) {
+              setTasks(updated);
+              setStats({
+                total: updated.length,
+                completed: updated.filter((t) => t.status === 'completed').length,
+                pending: updated.filter((t) => t.status !== 'completed').length,
+                overdue: 0,
+                focusMins: updated.reduce((sum, t) => sum + (t.focus_minutes || 0), 0),
+              });
+            }
+          });
+        });
+      }
+    });
+    offlineSyncManager.init();
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -548,6 +565,82 @@ export default function TasksScreen() {
       setIsModalOpen(false);
       await fetchTasks();
     } catch (err: any) {
+      const isNetErr =
+        isOffline ||
+        err?.name === 'NetworkError' ||
+        (err?.message &&
+          (err.message.toLowerCase().includes('network') ||
+            err.message.toLowerCase().includes('connect') ||
+            err.message.toLowerCase().includes('failed to fetch')));
+
+      if (isNetErr) {
+        // Optimistic offline task creation
+        const offlineId = editingTask
+          ? editingTask.id
+          : `offline_task_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const localTask: Task = {
+          id: offlineId,
+          user_id: 'local_offline_user',
+          title: title.trim(),
+          description: description.trim() || null,
+          subject_id: subjectId,
+          depends_on_task_id: dependsOnTaskId,
+          recurrence_pattern: recurrencePattern,
+          recurrence_interval: recurrenceInterval,
+          priority,
+          status,
+          estimated_minutes: isNaN(estMins) ? null : estMins,
+          subtasks: subtasks || [],
+          due_datetime: calculatedDueDate,
+          focus_minutes: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        if (editingTask) {
+          setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? localTask : t)));
+        } else {
+          setTasks((prev) => [localTask, ...prev]);
+          await queuePendingAction({
+            type: 'create_task',
+            taskId: offlineId,
+            payload: {
+              title: title.trim(),
+              description: description.trim() || null,
+              subject_id: subjectId,
+              depends_on_task_id: dependsOnTaskId,
+              recurrence_pattern: recurrencePattern,
+              recurrence_interval: recurrenceInterval,
+              priority,
+              status,
+              estimated_minutes: isNaN(estMins) ? null : estMins,
+              subtasks,
+              due_datetime: calculatedDueDate,
+            },
+          });
+        }
+
+        const currentTasks = editingTask
+          ? tasks.map((t) => (t.id === editingTask.id ? localTask : t))
+          : [localTask, ...tasks];
+        await saveCachedTasks(currentTasks);
+        setStats({
+          total: currentTasks.length,
+          completed: currentTasks.filter((t) => t.status === 'completed').length,
+          pending: currentTasks.filter((t) => t.status !== 'completed').length,
+          overdue: 0,
+          focusMins: currentTasks.reduce((sum, t) => sum + (t.focus_minutes || 0), 0),
+        });
+        setIsModalOpen(false);
+        setIsOffline(true);
+        offlineSyncManager.init();
+        Alert.alert(
+          '📶 Saved Offline',
+          'Your task has been saved locally on this device. It will automatically upload to your account when internet reconnects.'
+        );
+        return;
+      }
+
       Alert.alert('Save Failed', err?.message || 'Could not save task.');
     } finally {
       setIsSaving(false);
@@ -559,11 +652,30 @@ export default function TasksScreen() {
     try {
       if (isOffline) {
         // Queue offline
-        await queuePendingAction({ type: 'toggle_status', taskId: task.id });
+        await queuePendingAction({
+          type: 'toggle_status',
+          taskId: task.id,
+          payload: { status: task.status },
+        });
         const newStatus: TaskStatus = task.status === 'completed' ? 'todo' : 'completed';
-        setTasks((prev) =>
-          prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t))
+        const updatedList = tasks.map((t) =>
+          t.id === task.id
+            ? {
+                ...t,
+                status: newStatus,
+                completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
+              }
+            : t
         );
+        setTasks(updatedList);
+        await saveCachedTasks(updatedList);
+        setStats({
+          total: updatedList.length,
+          completed: updatedList.filter((t) => t.status === 'completed').length,
+          pending: updatedList.filter((t) => t.status !== 'completed').length,
+          overdue: 0,
+          focusMins: updatedList.reduce((s, it) => s + (it.focus_minutes || 0), 0),
+        });
         return;
       }
 
@@ -616,7 +728,16 @@ export default function TasksScreen() {
           try {
             if (isOffline) {
               await queuePendingAction({ type: 'delete_task', taskId: task.id });
-              setTasks((prev) => prev.filter((t) => t.id !== task.id));
+              const remaining = tasks.filter((t) => t.id !== task.id);
+              setTasks(remaining);
+              await saveCachedTasks(remaining);
+              setStats({
+                total: remaining.length,
+                completed: remaining.filter((t) => t.status === 'completed').length,
+                pending: remaining.filter((t) => t.status !== 'completed').length,
+                overdue: 0,
+                focusMins: remaining.reduce((s, it) => s + (it.focus_minutes || 0), 0),
+              });
               return;
             }
             await cancelTaskReminder(task.id);
@@ -919,7 +1040,7 @@ export default function TasksScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={fetchTasks}
+              onPress={() => fetchTasks(true)}
               accessibilityLabel="Refresh and sync"
               style={styles.quickActionIconBtn}>
               <Text style={styles.quickActionIcon}>🔄</Text>
@@ -1037,7 +1158,7 @@ export default function TasksScreen() {
             style={styles.taskList}
             contentContainerStyle={styles.listContent}
             refreshing={isLoading}
-            onRefresh={fetchTasks}
+            onRefresh={() => fetchTasks(true)}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               !isLoading ? (

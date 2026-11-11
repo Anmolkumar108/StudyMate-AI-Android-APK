@@ -22,6 +22,8 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.ai_chat import AIChatSession
+    from app.models.announcement import Announcement
+    from app.models.audit_log import AuditLog
     from app.models.document import Document
     from app.models.exam import Exam
     from app.models.flashcard import FlashcardDeck
@@ -128,6 +130,10 @@ class User(Base):
         nullable=False,
         default=True,
         server_default=text("true"),
+    )
+    push_token: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
     quiet_hours_start: Mapped[time | None] = mapped_column(
         Time,
@@ -265,6 +271,20 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+
+    # Relationship to announcements created
+    announcements: Mapped[list["Announcement"]] = relationship(
+        "Announcement",
+        back_populates="creator",
+        foreign_keys="[Announcement.created_by]",
+    )
+
+    # Relationship to audit logs authored
+    audit_logs: Mapped[list["AuditLog"]] = relationship(
+        "AuditLog",
+        back_populates="actor",
+        foreign_keys="[AuditLog.actor_id]",
     )
 
     __table_args__ = (

@@ -23,6 +23,7 @@ import { BorderRadius, MinTouchTarget, Spacing } from '@/constants/theme';
 import { usePomodoro } from '@/hooks/use-pomodoro';
 import { useTheme } from '@/hooks/use-theme';
 import { studySessionApi, taskApi } from '@/services/api/client';
+import { ambientSoundEngine } from '@/services/audio/ambient-player';
 
 const FOCUS_PRESETS = [15, 25, 30, 45, 60, 90] as const;
 const SHORT_BREAK_PRESETS = [3, 5, 10, 15] as const;
@@ -125,6 +126,31 @@ export default function PomodoroScreen() {
         .catch(() => {});
     }
   }, [status, completedMode, taskId, targetDurationSeconds]);
+
+  // Control Ambient Background Audio based on Timer Status & Selected Sound
+  useEffect(() => {
+    if (status === 'running' && activeSound !== 'mute') {
+      ambientSoundEngine.setTrack(activeSound, true);
+    } else {
+      ambientSoundEngine.pause();
+    }
+  }, [status, activeSound]);
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      ambientSoundEngine.stop();
+    };
+  }, []);
+
+  const handleSelectSound = (soundId: AmbientSound['id']) => {
+    setActiveSound(soundId);
+    if (status === 'running') {
+      ambientSoundEngine.setTrack(soundId, true);
+    } else {
+      ambientSoundEngine.setTrack(soundId, false);
+    }
+  };
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -445,7 +471,7 @@ export default function PomodoroScreen() {
               return (
                 <TouchableOpacity
                   key={snd.id}
-                  onPress={() => setActiveSound(snd.id)}
+                  onPress={() => handleSelectSound(snd.id)}
                   style={[
                     styles.soundChip,
                     isCurrent && styles.soundChipActive,

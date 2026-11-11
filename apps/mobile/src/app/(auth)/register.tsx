@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/context/auth-context';
+import { getDeviceDetails } from '@/services/device-info';
 import { isGoogleOAuthConfigured } from '@/services/google-auth';
 import {
   validateConfirmPassword,
@@ -102,10 +103,13 @@ export default function RegisterScreen() {
     setFieldErrors({});
 
     try {
+      const dev = getDeviceDetails();
       await register({
         full_name: fullName.trim(),
         email: email.trim().toLowerCase(),
         password,
+        device_name: dev.deviceName,
+        device_os: dev.deviceOs,
       });
       // Directly enter app on successful registration
       router.replace('/');

@@ -230,6 +230,41 @@ export const nativeNotificationAdapter: NotificationAdapter = {
           sound: 'default',
           showBadge: true,
         });
+
+        // 6. University & System Broadcast Announcements
+        await notif.setNotificationChannelAsync('system-announcements', {
+          name: 'System Announcements',
+          description: 'Important platform broadcast notifications',
+          importance: notif.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#6366F1',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
+
+        // 7. Background FCM Timetable & Deadline Channels
+        await notif.setNotificationChannelAsync('timetable-alerts', {
+          name: 'Timetable Alerts (FCM)',
+          description: 'Background class routine and lecture start alerts',
+          importance: notif.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#38BDF8',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
+
+        await notif.setNotificationChannelAsync('deadline-reminders', {
+          name: 'Deadline Reminders (FCM)',
+          description: 'Critical assignment deadlines and submission alerts',
+          importance: notif.AndroidImportance.MAX,
+          vibrationPattern: [0, 300, 200, 300],
+          lightColor: '#F59E0B',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
       } catch (err) {
         console.warn('[Notifications] Channel setup error:', err);
       }
@@ -242,6 +277,29 @@ export const nativeNotificationAdapter: NotificationAdapter = {
       if (existingStatus !== 'granted') {
         const { status } = await notif.requestPermissionsAsync();
         finalStatus = status;
+      }
+
+      if (finalStatus === 'granted') {
+        try {
+          let token: string | null = null;
+          if (typeof notif.getExpoPushTokenAsync === 'function') {
+            const tokenRes = await notif.getExpoPushTokenAsync();
+            token = tokenRes.data;
+          } else if (typeof notif.getDevicePushTokenAsync === 'function') {
+            const tokenRes = await notif.getDevicePushTokenAsync();
+            token = tokenRes.data;
+          }
+
+          if (token) {
+            // Register token with backend for background FCM notifications
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { userSecurityApi } = require('./api/client');
+            await userSecurityApi.registerPushToken(token, getPlatformOS());
+          }
+        } catch (tokenErr) {
+          // Push token registration non-blocking on emulators or dev clients
+          console.log('[Notifications] Push token notice:', tokenErr);
+        }
       }
 
       return finalStatus === 'granted';

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
 from app.db.session import get_db_session
-from app.models.user import User, UserStatus
+from app.models.user import User, UserRole, UserStatus
 from app.repositories.ai_chat_repo import AIChatRepository
 from app.repositories.document_repo import DocumentRepository
 from app.repositories.exam_repo import ExamRepository
@@ -24,6 +24,7 @@ from app.repositories.subject_repo import SubjectRepository
 from app.repositories.task_repo import TaskRepository
 from app.repositories.timetable_repo import TimetableRepository
 from app.repositories.user_repo import UserRepository
+from app.services.admin_service import AdminService
 from app.services.ai_chat_service import AIChatService
 from app.services.ai_service import AIService
 from app.services.analytics_service import AnalyticsService
@@ -239,3 +240,47 @@ async def get_current_active_user(
             detail="Inactive user account",
         )
     return current_user
+
+
+def get_admin_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AdminService:
+    return AdminService(db)
+
+
+async def get_current_admin_user(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+) -> User:
+    if current_user.role not in (
+        UserRole.SUPER_ADMIN,
+        UserRole.SUPPORT_ADMIN,
+        UserRole.CONTENT_MANAGER,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Administrative privileges required",
+        )
+    return current_user
+
+
+async def require_super_admin(
+    current_user: Annotated[User, Depends(get_current_admin_user)],
+) -> User:
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Super Admin privileges required",
+        )
+    return current_user
+
+
+async def require_support_admin(
+    current_user: Annotated[User, Depends(get_current_admin_user)],
+) -> User:
+    if current_user.role not in (UserRole.SUPER_ADMIN, UserRole.SUPPORT_ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Support Admin or Super Admin privileges required",
+        )
+    return current_user
+
