@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 export interface DeviceMetadata {
   deviceName: string;
   deviceOs: string;
@@ -7,6 +5,19 @@ export interface DeviceMetadata {
   modelName?: string;
   isDevice: boolean;
   appVersion: string;
+}
+
+function getPlatformOS(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const rn = require('react-native');
+    if (rn && rn.Platform && rn.Platform.OS) {
+      return rn.Platform.OS;
+    }
+  } catch {
+    // Fallback for Node test environments
+  }
+  return 'android';
 }
 
 export function getDeviceDetails(): DeviceMetadata {
@@ -28,12 +39,13 @@ export function getDeviceDetails(): DeviceMetadata {
     // Fallback for mock/test environments
   }
 
-  const osPrefix = Platform.OS === 'android' ? 'Android' : Platform.OS === 'ios' ? 'iOS' : Platform.OS;
+  const os = getPlatformOS();
+  const osPrefix = os === 'android' ? 'Android' : os === 'ios' ? 'iOS' : os;
   const fullOs = `${osPrefix}${osVersion}`;
 
   let fullModel = modelName;
   if (!fullModel) {
-    fullModel = Platform.OS === 'android' ? 'Android Device' : 'Apple Device';
+    fullModel = os === 'android' ? 'Android Device' : 'Apple Device';
   } else if (manufacturer && !fullModel.toLowerCase().includes(manufacturer.toLowerCase())) {
     fullModel = `${manufacturer} ${fullModel}`;
   }

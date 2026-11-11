@@ -153,6 +153,10 @@ class AmbientSoundEngine {
     }
   }
 
+  public getVolume(): number {
+    return this.volume;
+  }
+
   public getCurrentTrack(): AmbientSoundType {
     return this.currentTrackId;
   }
