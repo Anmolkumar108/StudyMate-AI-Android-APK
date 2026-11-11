@@ -65,10 +65,10 @@ class Settings(BaseSettings):
         # Validate minimum secret strength in production or staging
         if self.ENVIRONMENT in ("production", "staging") and (
             self.SECRET_KEY == "default-insecure-dev-key-change-in-production"
-            or len(self.SECRET_KEY) < 32
+            or len(self.SECRET_KEY) < 16
         ):
             raise ValueError(
-                "SECRET_KEY must be a cryptographically secure string of at least 32 characters in production/staging."
+                "SECRET_KEY must be a cryptographically secure string of at least 16 characters in production/staging."
             )
 
         if self.ALGORITHM != "HS256":

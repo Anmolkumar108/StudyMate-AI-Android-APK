@@ -13,11 +13,10 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.DEBUG else None,
 )
 
-# CORS Configuration
-# In development, allow local dev servers and mobile emulators
+# CORS Configuration - Support Mobile App & Admin Console
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.DEBUG else [],
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
