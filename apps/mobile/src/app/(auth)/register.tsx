@@ -381,35 +381,38 @@ export default function RegisterScreen() {
               )}
             </Pressable>
 
-            {/* Divider "or" */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Real Google OAuth Sign-In */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.googleButton,
-                pressed && styles.googleButtonPressed,
-                (isLoading || isGoogleLoading) && styles.googleButtonDisabled,
-              ]}
-              onPress={handleGoogleSignIn}
-              disabled={isLoading || isGoogleLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Continue with Google">
-              {isGoogleLoading ? (
-                <ActivityIndicator color="#A855F7" size="small" />
-              ) : (
-                <View style={styles.googleContentRow}>
-                  <View style={styles.googleBadge}>
-                    <Text style={styles.googleLetterG}>G</Text>
-                  </View>
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+            {/* Real Google OAuth Sign-In (rendered only when Google Cloud Client ID is configured) */}
+            {isGoogleOAuthConfigured() && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or</Text>
+                  <View style={styles.dividerLine} />
                 </View>
-              )}
-            </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.googleButton,
+                    pressed && styles.googleButtonPressed,
+                    (isLoading || isGoogleLoading) && styles.googleButtonDisabled,
+                  ]}
+                  onPress={handleGoogleSignIn}
+                  disabled={isLoading || isGoogleLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Google">
+                  {isGoogleLoading ? (
+                    <ActivityIndicator color="#A855F7" size="small" />
+                  ) : (
+                    <View style={styles.googleContentRow}>
+                      <View style={styles.googleBadge}>
+                        <Text style={styles.googleLetterG}>G</Text>
+                      </View>
+                      <Text style={styles.googleButtonText}>Continue with Google</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </>
+            )}
 
             {/* Switch to Login */}
             <View style={styles.switchAuthRow}>

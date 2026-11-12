@@ -301,45 +301,47 @@ export default function LoginScreen() {
               )}
             </Pressable>
 
-            {/* Divider "or" */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Real Google OAuth Button */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.googleButton,
-                pressed && styles.googleButtonPressed,
-                (isLoading || isGoogleLoading) && styles.googleButtonDisabled,
-              ]}
-              onPress={handleGoogleSignIn}
-              disabled={isLoading || isGoogleLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Continue with Google">
-              {isGoogleLoading ? (
-                <ActivityIndicator color="#A855F7" size="small" />
-              ) : (
-                <View style={styles.googleContentRow}>
-                  <View style={styles.googleBadge}>
-                    <Text style={styles.googleLetterG}>G</Text>
-                  </View>
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+            {/* Real Google OAuth Button (rendered only when Google Cloud Client ID is configured) */}
+            {isGoogleOAuthConfigured() && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or</Text>
+                  <View style={styles.dividerLine} />
                 </View>
-              )}
-            </Pressable>
 
-            {/* Go to Google Account Option */}
-            <Pressable
-              onPress={openGoogleAccountPage}
-              style={styles.goToGoogleLink}
-              hitSlop={8}
-              accessibilityRole="link"
-              accessibilityLabel="Go to Google account portal">
-              <Text style={styles.goToGoogleText}>Go to Google account portal ↗</Text>
-            </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.googleButton,
+                    pressed && styles.googleButtonPressed,
+                    (isLoading || isGoogleLoading) && styles.googleButtonDisabled,
+                  ]}
+                  onPress={handleGoogleSignIn}
+                  disabled={isLoading || isGoogleLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Google">
+                  {isGoogleLoading ? (
+                    <ActivityIndicator color="#A855F7" size="small" />
+                  ) : (
+                    <View style={styles.googleContentRow}>
+                      <View style={styles.googleBadge}>
+                        <Text style={styles.googleLetterG}>G</Text>
+                      </View>
+                      <Text style={styles.googleButtonText}>Continue with Google</Text>
+                    </View>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={openGoogleAccountPage}
+                  style={styles.goToGoogleLink}
+                  hitSlop={8}
+                  accessibilityRole="link"
+                  accessibilityLabel="Go to Google account portal">
+                  <Text style={styles.goToGoogleText}>Go to Google account portal ↗</Text>
+                </Pressable>
+              </>
+            )}
 
             {/* Link to Signup */}
             <View style={styles.switchAuthRow}>
