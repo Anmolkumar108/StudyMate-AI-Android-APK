@@ -25,6 +25,20 @@ services:
         sync: false
       - key: ADMIN_SECURITY_KEY
         value: "979831"
+      - key: SMTP_HOST
+        value: "smtp.gmail.com"
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: "akanmolbhumihar09@gmail.com"
+      - key: SMTP_PASSWORD
+        value: "tzuqxcweqsvnabxh"
+      - key: SMTP_TLS
+        value: "true"
+      - key: EMAILS_FROM_EMAIL
+        value: "akanmolbhumihar09@gmail.com"
+      - key: EMAILS_FROM_NAME
+        value: "StudyMate AI"
 
 databases:
   - name: studymate-postgres

@@ -56,9 +56,11 @@ class EmailService:
         msg.attach(part2)
 
         try:
-            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=15) as server:
+                server.ehlo()
                 if self.smtp_tls:
                     server.starttls()
+                    server.ehlo()
                 if self.smtp_user and self.smtp_password:
                     server.login(self.smtp_user, self.smtp_password)
                 server.sendmail(self.from_email, [to_email], msg.as_string())
