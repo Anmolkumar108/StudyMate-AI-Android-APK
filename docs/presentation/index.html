@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudyMate AI — Official Project Presentation</title>
+  <style>
+    :root {
+      --bg: #070913;
+      --card-bg: rgba(19, 27, 46, 0.85);
+      --card-border: rgba(99, 102, 241, 0.2);
+      --primary: #6366f1;
+      --accent: #8b5cf6;
+      --accent-cyan: #38bdf8;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Ambient Background Glow */
+    .glow-sphere {
+      position: fixed;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.05) 50%, transparent 70%);
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .glow-1 { top: -100px; left: -100px; }
+    .glow-2 { bottom: -100px; right: -100px; }
+
+    /* Deck Container */
+    #deck-container {
+      position: relative;
+      width: 94vw;
+      max-width: 1400px;
+      height: 86vh;
+      max-height: 820px;
+      background: radial-gradient(circle at top left, #16182e 0%, #0b0f19 80%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 40px rgba(99, 102, 241, 0.15);
+      overflow: hidden;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Slide Content */
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 48px 56px 72px;
+      display: none;
+      flex-direction: column;
+      opacity: 0;
+      transform: scale(0.98);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow-y: auto;
+    }
+    .slide.active {
+      display: flex;
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Header & Badges */
+    .slide-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #a5b4fc;
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 4px 14px;
+      border-radius: 999px;
+      width: fit-content;
+      margin-bottom: 12px;
+    }
+    .slide-title {
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+    .slide-subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+
+    /* Cards & Layout Grids */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      flex: 1;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      flex: 1;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(12px);
+    }
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-subtitle {
+      font-size: 12px;
+      color: #818cf8;
+      font-weight: 600;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .card-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .card-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .card-list li::before {
+      content: "•";
+      color: #818cf8;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    /* Image Gallery */
+    .img-showcase {
+      display: flex;
+      gap: 18px;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+    }
+    .showcase-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 14px;
+      border-radius: 20px;
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+    }
+    .showcase-item img {
+      width: 230px;
+      height: auto;
+      border-radius: 14px;
+      border: 1px solid #334155;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    }
+    .showcase-label {
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #e2e8f0;
+      text-align: center;
+    }
+
+    /* Navigation Bar */
+    .controls-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(11, 15, 25, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      z-index: 10;
+    }
+    .nav-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .nav-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+    .progress-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .keyboard-hint {
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    /* Custom Hero Slide */
+    .hero-slide {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+    }
+    .hero-content {
+      max-width: 60%;
+    }
+    .hero-title {
+      font-size: 52px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #ffffff 40%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+    }
+    .hero-tagline {
+      font-size: 20px;
+      font-weight: 600;
+      color: #a5b4fc;
+      margin-bottom: 18px;
+    }
+    .hero-desc {
+      font-size: 15px;
+      color: var(--text-muted);
+      line-height: 1.65;
+      margin-bottom: 30px;
+    }
+    .pills-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+    .pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+    }
+    .pill-highlight {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="glow-sphere glow-1"></div>
+  <div class="glow-sphere glow-2"></div>
+
+  <div id="deck-container">
+
+    <!-- SLIDE 1: HERO -->
+    <div class="slide active">
+      <div class="hero-slide">
+        <div class="hero-content">
+          <div class="slide-tag">PROJECT PRESENTATION & PRODUCT BRIEF</div>
+          <h1 class="hero-title">StudyMate AI</h1>
+          <div class="hero-tagline">The Premium AI-Powered Student Learning & Productivity Suite</div>
+          <p class="hero-desc">
+            An all-in-one unified academic ecosystem engineered natively for university students. Uniting Google Gemini multimodal intelligence with structured Cornell Note taking, Pomodoro binaural soundscapes, Spaced Repetition Flashcards, and Timetable/Attendance safeguards.
+          </p>
+
+          <div class="pills-row">
+            <span class="pill">React Native 0.88</span>
+            <span class="pill">Expo SDK 58</span>
+            <span class="pill">Python FastAPI</span>
+            <span class="pill">PostgreSQL 16</span>
+            <span class="pill">Google Gemini</span>
+            <span class="pill pill-highlight">Build 3 APK Live</span>
+          </div>
+
+          <div class="card" style="padding: 16px 20px;">
+            <div style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 4px;">Developer & Architect</div>
+            <div style="font-size: 12px; color: #cbd5e1;">Anmol Singh &bull; Founder & Lead Developer &bull; Bihar, India</div>
+          </div>
+        </div>
+
+        <div class="showcase-item" style="padding: 10px;">
+          <img src="../screenshots/01_auth_login.jpg" alt="Login Screen" style="width: 260px;" />
+          <div class="showcase-label">StudyMate AI Mobile App</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: THE PROBLEM -->
+    <div class="slide">
+      <div class="slide-tag">THE PROBLEM STATEMENT</div>
+      <h2 class="slide-title">The Real-World Academic Crisis in Higher Education</h2>
+      <div class="slide-subtitle">Why traditional study habits and generic productivity apps fail modern college students</div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">1. Severe Information Overload</div>
+          <div class="card-subtitle">Cognitive Overwhelm</div>
+          <ul class="card-list">
+            <li>Students balance 5–7 complex courses simultaneously with 100+ pages of dense PDFs and textbooks.</li>
+            <li>Lack of structured synthesis leads to rote memorization and immediate post-exam forgetting.</li>
+            <li>Search engines provide generic, uncurated, or confusing answers.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">2. Fragmented App Fatigue</div>
+          <div class="card-subtitle">Broken Attention Spans</div>
+          <ul class="card-list">
+            <li>Students switch between 5 separate apps: timers, notes, calendar, flashcards, and ChatGPT.</li>
+            <li>Constant app-switching destroys deep study focus and induces study procrastination.</li>
+            <li>No single platform ties deadlines to daily study goals.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">3. The 75% Attendance Trap</div>
+          <div class="card-subtitle">Institutional Penalties</div>
+          <ul class="card-list">
+            <li>Universities strictly mandate 75% minimum attendance to sit for final semester examinations.</li>
+            <li>Students lose track of missed lectures until debarred from examinations.</li>
+            <li>Timetable changes and classroom confusion lead to accidental absences.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: THE SOLUTION -->
+    <div class="slide">
+      <div class="slide-tag">THE SOLUTION</div>
+      <h2 class="slide-title">StudyMate AI: A Unified Academic Operating System</h2>
+      <div class="slide-subtitle">Combining cutting-edge generative AI with proven cognitive learning science</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Key Architectural Breakthroughs</div>
+          <div class="card-subtitle">Designed for Focus & Retention</div>
+          <ul class="card-list">
+            <li><strong>All-in-One Integration:</strong> Notes, timers, timetable, flashcards, and AI tutor in one seamless native app.</li>
+            <li><strong>Google Gemini Multimodal LLM:</strong> Instant step-by-step topic breakdowns, Cornell summaries, and exam-grade quizzes.</li>
+            <li><strong>Cognitive Science:</strong> Implements the Leitner Spaced Repetition algorithm and 25/5 Pomodoro rhythm.</li>
+            <li><strong>Attendance Safeguard:</strong> Real-time percentage tracking with proactive warnings before dipping below 75%.</li>
+            <li><strong>OLED Dark Aesthetic:</strong> Battery-efficient cyberpunk dark design tailored for late-night campus study sessions.</li>
+          </ul>
+        </div>
+
+        <div class="img-showcase">
+          <div class="showcase-item">
+            <img src="../screenshots/02_home_top.jpg" alt="Home Top" style="width: 220px;" />
+            <div class="showcase-label">Overview & Next Class</div>
+          </div>
+          <div class="showcase-item">
+            <img src="../screenshots/03_home_schedule_heatmap.jpg" alt="Heatmap" style="width: 220px;" />
+            <div class="showcase-label">Daily Focus Heatmap</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: HOME & DASHBOARD -->
+    <div class="slide">
+      <div class="slide-tag">FEATURE DEEP-DIVE</div>
+      <h2 class="slide-title">Smart Student Dashboard & Daily Momentum</h2>
+      <div class="slide-subtitle">Complete daily academic visibility in three natural scroll regions</div>
+
+      <div class="img-showcase">
+        <div class="showcase-item">
+          <img src="../screenshots/02_home_top.jpg" alt="Home Top" />
+          <div class="showcase-label">1. Next Lecture & Exams</div>
+        </div>
+        <div class="showcase-item">
+          <img src="../screenshots/03_home_schedule_heatmap.jpg" alt="Heatmap" />
+          <div class="showcase-label">2. Schedule & Study Heatmap</div>
+        </div>
+        <div class="showcase-item">
+          <img src="../screenshots/04_home_subjects_attendance.jpg" alt="Subjects" />
+          <div class="showcase-label">3. Subjects & Attendance 100%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: STUDY HUB -->
+    <div class="slide">
+      <div class="slide-tag">FEATURE DEEP-DIVE</div>
+      <h2 class="slide-title">Study Hub: 12 Academic Super-Tools</h2>
+      <div class="slide-subtitle">Integrated workspace to learn, focus, retain, and accelerate</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Study Hub Power Features</div>
+          <div class="card-subtitle">Built for Peak Cognitive Performance</div>
+          <ul class="card-list">
+            <li><strong>Today's Study Momentum:</strong> Configured 60m focus + 5m break cycle tracking elapsed vs remaining time.</li>
+            <li><strong>Quick-Start 25m Focus Session:</strong> 1-click launch for rapid revision blocks with ambient background noise reduction.</li>
+            <li><strong>Smart AI Study Planner:</strong> Automatically timeboxes daily study workload across upcoming exams, pending assignment checklists, and university timetable gaps.</li>
+            <li><strong>Cornell Note Synthesizer:</strong> Formats dense text into Cues, Main Notes, and Exam Summaries.</li>
+            <li><strong>Spaced Repetition Decks:</strong> Leitner review intervals to ensure long-term retention before semester finals.</li>
+          </ul>
+        </div>
+
+        <div class="img-showcase">
+          <div class="showcase-item">
+            <img src="../screenshots/05_study_hub.jpg" alt="Study Hub" style="width: 260px;" />
+            <div class="showcase-label">Study Hub Workspace</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 6: TASKS & DEADLINES -->
+    <div class="slide">
+      <div class="slide-tag">FEATURE DEEP-DIVE</div>
+      <h2 class="slide-title">Tasks & Deadlines: The Command Center</h2>
+      <div class="slide-subtitle">Granular assignment tracking, subtask checklists, and priority alarms</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Command Center Task Engine</div>
+          <div class="card-subtitle">Zero Missed Deadlines</div>
+          <ul class="card-list">
+            <li><strong>Multi-Step Task Checklists:</strong> Break complex assignments into trackable steps (e.g. 'Review course materials', 'Practice coding exercises', 'Complete assigned project').</li>
+            <li><strong>Urgency Visual Matrix:</strong> Color-coded priority badges (Urgent, Weekly, Low, Medium) for immediate visual triage.</li>
+            <li><strong>Subject-Specific Filtering:</strong> Filter by courses (Python, DBMS, Math) with real-time pending vs completed counts.</li>
+            <li><strong>Snooze & Alarms:</strong> 10-minute snooze capability and pre-deadline system notifications.</li>
+            <li><strong>Integrated Calendar:</strong> Visual day-by-day deadline map to prevent assignment bottlenecks.</li>
+          </ul>
+        </div>
+
+        <div class="img-showcase">
+          <div class="showcase-item">
+            <img src="../screenshots/06_tasks_deadlines.jpg" alt="Tasks" style="width: 260px;" />
+            <div class="showcase-label">Tasks & Deadlines Command Center</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 7: TIMETABLE & ATTENDANCE -->
+    <div class="slide">
+      <div class="slide-tag">FEATURE DEEP-DIVE</div>
+      <h2 class="slide-title">Timetable Matrix & Attendance Safeguard</h2>
+      <div class="slide-subtitle">Ensure academic compliance and never miss a college lecture</div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">📅 Dynamic Weekly Schedule</div>
+          <div class="card-subtitle">Classroom Routing</div>
+          <ul class="card-list">
+            <li>Maps out lectures day-by-day with professor names, subject codes, and room numbers (e.g. Room A-112).</li>
+            <li>Real-time "Ongoing" badge for current active lectures.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⏰ Pre-Class System Alarms</div>
+          <div class="card-subtitle">Never Be Late</div>
+          <ul class="card-list">
+            <li>Automated reminders fired 10 minutes prior to lectures.</li>
+            <li>Countdown widget on home screen showing exact hours and days until next class.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🛡️ 100% Attendance Safeguard</div>
+          <div class="card-subtitle">Institutional Protection</div>
+          <ul class="card-list">
+            <li>Calculates real-time attendance percentage per enrolled subject.</li>
+            <li>Proactive visual alerts warn students when approaching the 75% minimum threshold.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 8: SYSTEM ARCHITECTURE -->
+    <div class="slide">
+      <div class="slide-tag">TECHNICAL ARCHITECTURE</div>
+      <h2 class="slide-title">Modern Layered Architecture & Tech Stack</h2>
+      <div class="slide-subtitle">Built completely from scratch with clean, production-grade patterns</div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">📱 Mobile Client (Android)</div>
+          <div class="card-subtitle">React Native & Expo</div>
+          <ul class="card-list">
+            <li><strong>Framework:</strong> React Native 0.88 + Expo SDK 58</li>
+            <li><strong>Routing:</strong> Expo Router (File-based)</li>
+            <li><strong>State:</strong> TanStack Query v5 + Zustand</li>
+            <li><strong>Storage:</strong> Expo SecureStore (Hardware Keystore)</li>
+            <li><strong>UI:</strong> Strict TypeScript + Reanimated 4.7</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⚡ Backend API (FastAPI)</div>
+          <div class="card-subtitle">Modular Monolith</div>
+          <ul class="card-list">
+            <li><strong>Framework:</strong> FastAPI + Python 3.12+</li>
+            <li><strong>ORM:</strong> SQLAlchemy 2.0 Async (asyncpg)</li>
+            <li><strong>Migrations:</strong> Alembic (Revisions 001-017)</li>
+            <li><strong>Security:</strong> Argon2id password hashing</li>
+            <li><strong>Relay:</strong> Google Apps Script Webhook on Port 443</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">☁️ Cloud & Database</div>
+          <div class="card-subtitle">Production Infrastructure</div>
+          <ul class="card-list">
+            <li><strong>Database:</strong> PostgreSQL 16+ on Render</li>
+            <li><strong>AI Gateway:</strong> Google Gemini API</li>
+            <li><strong>Admin Web:</strong> Vite React 19 on Vercel</li>
+            <li><strong>Builds:</strong> Expo EAS (Standalone APK)</li>
+            <li><strong>Telemetry:</strong> Live session auditing</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 9: SECURITY & PRIVACY -->
+    <div class="slide">
+      <div class="slide-tag">SECURITY & PRIVACY</div>
+      <h2 class="slide-title">Defense-in-Depth Security & Student Privacy</h2>
+      <div class="slide-subtitle">Industry-standard security architectures protecting student academic data</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Core Security Standards</div>
+          <div class="card-subtitle">Zero Leaks, Zero Compromises</div>
+          <ul class="card-list">
+            <li><strong>Zero Client Secrets:</strong> The Android mobile client contains NO API keys, NO database credentials, and NO secret keys. All AI and DB traffic is mediated via backend proxies.</li>
+            <li><strong>Argon2id Password Encryption:</strong> Memory-hard hashing resistant to brute-force attacks.</li>
+            <li><strong>Hardware Keystore Token Storage:</strong> Short-lived JWT access tokens and 30-day refresh tokens are stored in Android's hardware Keystore (Expo SecureStore).</li>
+            <li><strong>Application-Level Multi-Tenancy:</strong> Every query enforces user ownership (WHERE user_id = :current_user_id) preventing cross-tenant IDOR exploits.</li>
+            <li><strong>Verified Password Recovery:</strong> 6-digit OTP delivered via HTTPS webhook relay directly into Gmail; strictly manual entry with zero auto-filling.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Student Privacy Guarantee</div>
+          <div class="card-subtitle">Play Store Compliant</div>
+          <ul class="card-list">
+            <li><strong>No Data Selling:</strong> Student notes, quiz results, and study schedules are never sold, monetized, or shared with third-party advertisers.</li>
+            <li><strong>Privacy Policy Live:</strong> Public, verified Privacy Policy accessible on Vercel conforming to Google Play Developer policies.</li>
+            <li><strong>Minimal Permissions:</strong> App requests only essential permissions (Internet, Exact Alarms, Notifications) with zero background spyware.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 10: BUSINESS MODEL -->
+    <div class="slide">
+      <div class="slide-tag">BUSINESS MODEL & MONETIZATION</div>
+      <h2 class="slide-title">Student Adoption & Future Monetization Strategy</h2>
+      <div class="slide-subtitle">Designed for organic viral growth with switchable subscription tiers</div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">Phase 1: 100% Free Mode</div>
+          <div class="card-subtitle">Current Live Status</div>
+          <ul class="card-list">
+            <li>App is currently running in 100% Free Mode for all university students.</li>
+            <li>Zero paywalls or friction during student beta testing and campus rollout.</li>
+            <li>Focus: Rapid organic student onboarding and word-of-mouth adoption.</li>
+            <li>Monetization gate can be toggled on/off in 1-click via Admin Console.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Tier 1: Student Standard (₹0)</div>
+          <div class="card-subtitle">Free Forever Baseline</div>
+          <ul class="card-list">
+            <li>100 Notes creation capacity</li>
+            <li>5 University Courses</li>
+            <li>50 Daily AI Queries (Gemini Flash-Lite)</li>
+            <li>Standard Pomodoro Timer</li>
+            <li>Timetable & Attendance tracking</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Tier 2: StudyMate Pro (₹199/m)</div>
+          <div class="card-subtitle">Power Learning & Finals Prep</div>
+          <ul class="card-list">
+            <li>Unlimited Notes & Document Uploads</li>
+            <li>Unlimited University Courses</li>
+            <li>500 Daily AI Queries</li>
+            <li>Priority High-Intelligence AI (Gemini 3.8 Flash)</li>
+            <li>Exam Predictor & Advanced Quizzes</li>
+            <li>Campus promo codes (CAMPUS50)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 11: ROADMAP -->
+    <div class="slide">
+      <div class="slide-tag">PRODUCT ROADMAP</div>
+      <h2 class="slide-title">Strategic Roadmap: Evolution of StudyMate AI</h2>
+      <div class="slide-subtitle">From standalone Android application to connected campus study ecosystem</div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">Completed Milestones</div>
+          <div class="card-subtitle">Production Ready</div>
+          <ul class="card-list">
+            <li><strong>Phase 1:</strong> Core Academic Engine (Notes, Tasks, Flashcards, Timetable, Exams).</li>
+            <li><strong>Phase 2:</strong> Super Admin Web Console (Telemetry, AI Governance, Subscriptions).</li>
+            <li><strong>Phase 3:</strong> Standalone Android APK (Build 3 with 45s cold-start timeout & secure OTP relay).</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Q1 2027 Goals</div>
+          <div class="card-subtitle">Market Expansion</div>
+          <ul class="card-list">
+            <li><strong>Play Store Release:</strong> Production Android App Bundle (.aab) publication.</li>
+            <li><strong>Offline SQLite Caching:</strong> Review flashcards and Cornell notes during campus commute without active internet.</li>
+            <li><strong>Biometric Unlock:</strong> Fingerprint & Face Unlock on Android devices.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Long-Term Vision</div>
+          <div class="card-subtitle">Campus Ecosystem</div>
+          <ul class="card-list">
+            <li><strong>Campus Study Rooms:</strong> Real-time peer focus rooms with shared Pomodoro timers.</li>
+            <li><strong>University LMS Sync:</strong> 2-way syllabus sync with Canvas, Moodle, and Google Classroom.</li>
+            <li><strong>Voice AI Tutor:</strong> Real-time audio study dialogue using Gemini Live Multimodal API.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 12: DEMO & CONCLUSION -->
+    <div class="slide">
+      <div class="slide-tag">CONCLUSION & DEMO</div>
+      <h2 class="slide-title">Summary, Live Downloads & Demonstration</h2>
+      <div class="slide-subtitle">Try StudyMate AI live on your Android device today</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Key Presentation Highlights</div>
+          <div class="card-subtitle">Why StudyMate AI Wins</div>
+          <ul class="card-list">
+            <li><strong>Zero Legacy Architecture:</strong> 100% clean, modular monolith backend with async PostgreSQL.</li>
+            <li><strong>Real AI Integration:</strong> Real Google Gemini responses with fast cold-start tolerance.</li>
+            <li><strong>Real Student Solutions:</strong> Directly solves attendance debarment and exam cramming.</li>
+            <li><strong>Download APK:</strong> https://study-mate-ai-android-apk.vercel.app/download</li>
+            <li><strong>GitHub Repository:</strong> https://github.com/Anmolkumar108/StudyMate-AI-Android-APK</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Presenter & Lead Architect</div>
+          <div class="card-subtitle">Anmol Singh</div>
+          <ul class="card-list">
+            <li><strong>Role:</strong> Full-Stack Mobile & AI Systems Architect</li>
+            <li><strong>Mission:</strong> Empower college students to achieve academic excellence with zero stress.</li>
+            <li><strong>Email:</strong> Akanmolbhumihar09@gmail.com</li>
+            <li><br/><strong>Thank you for attending this presentation!</strong></li>
+            <li><em>"Study Smart... Grow Smart."</em></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS BAR -->
+    <div class="controls-bar">
+      <div class="nav-buttons">
+        <button class="nav-btn" onclick="prevSlide()">← Previous</button>
+        <button class="nav-btn" onclick="nextSlide()">Next →</button>
+        <button class="nav-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+      </div>
+
+      <div class="progress-text" id="slide-indicator">Slide 1 of 12</div>
+
+      <div class="keyboard-hint">Tip: Use Arrow Keys (← / →) or Spacebar to navigate</div>
+    </div>
+
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const indicator = document.getElementById('slide-indicator');
+    let currentSlide = 0;
+
+    function showSlide(index) {
+      if (index < 0) index = 0;
+      if (index >= slides.length) index = slides.length - 1;
+      slides[currentSlide].classList.remove('active');
+      currentSlide = index;
+      slides[currentSlide].classList.add('active');
+      indicator.textContent = `Slide ${currentSlide + 1} of ${slides.length}`;
+    }
+
+    function prevSlide() { showSlide(currentSlide - 1); }
+    function nextSlide() { showSlide(currentSlide + 1); }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      }
+    });
+  </script>
+</body>
+</html>
