@@ -124,7 +124,7 @@ class EmailService:
 
         # Primary Attempt: Standard TLS (Port 587 or configured port)
         try:
-            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=15) as server:
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=3) as server:
                 server.ehlo()
                 if self.smtp_tls:
                     server.starttls()
@@ -141,7 +141,7 @@ class EmailService:
 
         # Secondary Attempt: Direct SSL (Port 465) fallback for cloud container environments
         try:
-            with smtplib.SMTP_SSL(self.smtp_host, 465, timeout=15) as server:
+            with smtplib.SMTP_SSL(self.smtp_host, 465, timeout=3) as server:
                 if self.smtp_user and self.smtp_password:
                     server.login(self.smtp_user, self.smtp_password)
                 server.sendmail(self.from_email, [to_email], msg.as_string())

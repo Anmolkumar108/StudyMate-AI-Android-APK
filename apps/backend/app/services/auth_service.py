@@ -145,15 +145,18 @@ class AuthService:
                 verification_url = (
                     f"{settings.FRONTEND_URL}/api/v1/auth/verify-email?token={raw_token}"
                 )
-                try:
-                    await self.email_service.send_verification_email(
-                        to_email=new_user.email,
-                        full_name=new_user.full_name,
-                        verification_url=verification_url,
-                        raw_token=raw_token,
-                    )
-                except Exception as email_err:
-                    logger.warning(f"Could not dispatch verification email: {email_err}")
+                async def _dispatch_reg_email_bg() -> None:
+                    try:
+                        await self.email_service.send_verification_email(
+                            to_email=new_user.email,
+                            full_name=new_user.full_name,
+                            verification_url=verification_url,
+                            raw_token=raw_token,
+                        )
+                    except Exception as email_err:
+                        logger.warning(f"Could not dispatch verification email: {email_err}")
+
+                asyncio.create_task(_dispatch_reg_email_bg())
             except Exception as token_err:
                 await self.session.rollback()
                 logger.error(f"Error creating verification token: {token_err}")
@@ -223,12 +226,18 @@ class AuthService:
         verification_url = (
             f"{settings.FRONTEND_URL}/api/v1/auth/verify-email?token={raw_token}"
         )
-        await self.email_service.send_verification_email(
-            to_email=user.email,
-            full_name=user.full_name,
-            verification_url=verification_url,
-            raw_token=raw_token,
-        )
+        async def _dispatch_resend_bg() -> None:
+            try:
+                await self.email_service.send_verification_email(
+                    to_email=user.email,
+                    full_name=user.full_name,
+                    verification_url=verification_url,
+                    raw_token=raw_token,
+                )
+            except Exception as e:
+                logger.warning(f"Could not resend verification email: {e}")
+
+        asyncio.create_task(_dispatch_resend_bg())
 
     async def forgot_password(self, email: str) -> None:
         normalized_email = email.strip().lower()
@@ -341,14 +350,18 @@ class AuthService:
             f"======================================================="
         )
 
-        try:
-            await self.email_service.send_password_reset_otp_email(
-                to_email=user.email,
-                full_name=user.full_name,
-                otp_code=otp_code,
-            )
-        except Exception as err:
-            logger.warning(f"Could not dispatch OTP email via SMTP to {user.email}: {err}")
+        # Dispatch email asynchronously in background so client gets instant <100ms response
+        async def _dispatch_otp_background() -> None:
+            try:
+                await self.email_service.send_password_reset_otp_email(
+                    to_email=user.email,
+                    full_name=user.full_name,
+                    otp_code=otp_code,
+                )
+            except Exception as err:
+                logger.warning(f"Background OTP email dispatch notice for {user.email}: {err}")
+
+        asyncio.create_task(_dispatch_otp_background())
 
         return (
             user.email,
