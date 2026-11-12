@@ -2,9 +2,18 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/((?!download|privacy|assets/).*)",
+      "source": "/download",
+      "destination": "/download.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/((?!assets|download|privacy).*)",
       "destination": "/index.html"
     }
   ]
