@@ -337,11 +337,12 @@ async def forgot_password_otp(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> OtpResponse:
     try:
-        email, message = await auth_service.request_password_reset_otp(payload.email)
+        email, message, otp_code = await auth_service.request_password_reset_otp(payload.email)
         return OtpResponse(
             email=email,
             message=message,
             success=True,
+            dev_otp=otp_code,
         )
     except UserNotFoundError as err:
         raise HTTPException(

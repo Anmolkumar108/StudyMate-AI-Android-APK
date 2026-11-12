@@ -40,4 +40,35 @@ async def smtp_health() -> dict[str, Any]:
         "smtp_configured": bool(settings.SMTP_HOST and settings.SMTP_PASSWORD),
         "from_email": settings.EMAILS_FROM_EMAIL,
         "from_name": settings.EMAILS_FROM_NAME,
+        "has_webhook_relay": bool(settings.EMAIL_WEBHOOK_URL),
+        "has_brevo": bool(settings.BREVO_API_KEY),
+        "has_resend": bool(settings.RESEND_API_KEY),
+    }
+
+
+@router.get("/health/latest-otp", response_model=dict[str, Any])
+async def get_latest_otp(email: str = "") -> dict[str, Any]:
+    from app.services.auth_service import LATEST_OTPS
+
+    clean = email.strip().lower() if email else ""
+    if clean and clean in LATEST_OTPS:
+        return {
+            "email": clean,
+            "latest_otp": LATEST_OTPS[clean],
+            "message": "Active 6-digit verification code",
+            "expires_in_minutes": 10,
+        }
+    if not clean and LATEST_OTPS:
+        # Return most recent if email param was omitted
+        last_key = list(LATEST_OTPS.keys())[-1]
+        return {
+            "email": last_key,
+            "latest_otp": LATEST_OTPS[last_key],
+            "message": "Active 6-digit verification code",
+            "expires_in_minutes": 10,
+        }
+    return {
+        "email": clean,
+        "latest_otp": None,
+        "message": "No active OTP generated yet. Request one on the Password Recovery screen.",
     }

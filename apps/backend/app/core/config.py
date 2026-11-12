@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     SMTP_TLS: bool = True
     EMAILS_FROM_EMAIL: str = "akanmolbhumihar09@gmail.com"
     EMAILS_FROM_NAME: str = "StudyMate AI"
+    EMAIL_WEBHOOK_URL: str | None = None
+    BREVO_API_KEY: str | None = None
+    RESEND_API_KEY: str | None = None
 
     # Deep Linking & Token Expiry
     FRONTEND_URL: str = "http://localhost:8081"

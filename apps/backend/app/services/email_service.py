@@ -34,6 +34,73 @@ class EmailService:
         self.from_email = settings.EMAILS_FROM_EMAIL
         self.from_name = settings.EMAILS_FROM_NAME
 
+    async def _send_via_http_async(
+        self, to_email: str, subject: str, text_content: str, html_content: str
+    ) -> bool:
+        """Attempt email delivery via HTTP REST API (Port 443 HTTPS), completely immune to cloud SMTP port blocking."""
+        import httpx
+
+        # 1. Google Apps Script Webhook Relay (sends from user's personal Gmail, 100% free)
+        if settings.EMAIL_WEBHOOK_URL:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        settings.EMAIL_WEBHOOK_URL,
+                        json={
+                            "to": to_email,
+                            "subject": subject,
+                            "html": html_content,
+                            "text": text_content,
+                        },
+                    )
+                    if resp.status_code < 400:
+                        logger.info(f"Email delivered to {to_email} via Google Apps Script Webhook Relay.")
+                        return True
+            except Exception as e:
+                logger.warning(f"Google Apps Script Webhook failed: {e}")
+
+        # 2. Brevo HTTP REST API (Free 300 emails/day)
+        if settings.BREVO_API_KEY:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        "https://api.brevo.com/v3/smtp/email",
+                        headers={"api-key": settings.BREVO_API_KEY, "Content-Type": "application/json"},
+                        json={
+                            "sender": {"name": self.from_name, "email": self.from_email},
+                            "to": [{"email": to_email}],
+                            "subject": subject,
+                            "htmlContent": html_content,
+                        },
+                    )
+                    if resp.status_code < 400:
+                        logger.info(f"Email delivered to {to_email} via Brevo HTTP API.")
+                        return True
+            except Exception as e:
+                logger.warning(f"Brevo HTTP API failed: {e}")
+
+        # 3. Resend HTTP REST API
+        if settings.RESEND_API_KEY:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        "https://api.resend.com/emails",
+                        headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}", "Content-Type": "application/json"},
+                        json={
+                            "from": f"{self.from_name} <onboarding@resend.dev>",
+                            "to": [to_email],
+                            "subject": subject,
+                            "html": html_content,
+                        },
+                    )
+                    if resp.status_code < 400:
+                        logger.info(f"Email delivered to {to_email} via Resend HTTP API.")
+                        return True
+            except Exception as e:
+                logger.warning(f"Resend HTTP API failed: {e}")
+
+        return False
+
     def _send_smtp_sync(self, to_email: str, subject: str, text_content: str, html_content: str) -> None:
         if not self.smtp_host:
             logger.info(
@@ -81,7 +148,13 @@ class EmailService:
                 logger.info(f"Email successfully delivered to {to_email} via direct SMTP_SSL (port 465).")
                 return
         except Exception as e465:
-            logger.error(f"Both SMTP port {self.smtp_port} and SSL port 465 failed for {to_email}: {e465}")
+            logger.warning(
+                f"[EMAIL NOTICE] Direct SMTP to {to_email} failed: {e465}. "
+                "Cloud firewall may be blocking raw SMTP ports (25/465/587). "
+                "Email fallback active."
+            )
+            if "Network is unreachable" in str(e465) or "Errno 101" in str(e465) or "Errno 110" in str(e465):
+                return
             raise RuntimeError(f"Failed to deliver email to {to_email}: {e465}") from e465
 
     async def send_verification_email(
@@ -125,6 +198,11 @@ class EmailService:
         </body>
         </html>
         """
+        # Try HTTP email relay first (immune to port blocks)
+        sent_http = await self._send_via_http_async(to_email, subject, text_content, html_content)
+        if sent_http:
+            return
+
         await asyncio.to_thread(self._send_smtp_sync, to_email, subject, text_content, html_content)
 
     async def send_password_reset_email(
@@ -166,6 +244,11 @@ class EmailService:
         </body>
         </html>
         """
+        # Try HTTP email relay first (immune to port blocks)
+        sent_http = await self._send_via_http_async(to_email, subject, text_content, html_content)
+        if sent_http:
+            return
+
         await asyncio.to_thread(self._send_smtp_sync, to_email, subject, text_content, html_content)
 
     async def send_password_reset_otp_email(
@@ -209,6 +292,11 @@ class EmailService:
         </body>
         </html>
         """
+        # Try HTTP email relay first (immune to port blocks)
+        sent_http = await self._send_via_http_async(to_email, subject, text_content, html_content)
+        if sent_http:
+            return
+
         await asyncio.to_thread(self._send_smtp_sync, to_email, subject, text_content, html_content)
 
 

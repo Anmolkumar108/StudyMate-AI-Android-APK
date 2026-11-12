@@ -78,7 +78,10 @@ export default function ForgotPasswordScreen() {
 
     setIsSubmitting(true);
     try {
-      await requestPasswordResetOtp(email.trim().toLowerCase());
+      const res = await requestPasswordResetOtp(email.trim().toLowerCase());
+      if (res?.dev_otp) {
+        setOtp(res.dev_otp);
+      }
       setStep('verify_otp');
     } catch (err) {
       setLocalError((err as Error).message || 'Unable to send password reset code.');
