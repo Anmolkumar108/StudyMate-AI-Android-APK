@@ -209,7 +209,7 @@ export const API_CONFIG = {
   get baseUrl(): string {
     return getApiBaseUrl();
   },
-  timeoutMs: 15000,
+  timeoutMs: 45000,
   endpoints: {
     register: '/api/v1/auth/register',
     login: '/api/v1/auth/login',
