@@ -77,10 +77,6 @@ class UserNotFoundError(AuthError):
     """Raised when a requested user account does not exist."""
 
 
-# In-memory store for recent verification OTPs (enables testing and instant verification on cloud free tier)
-LATEST_OTPS: dict[str, str] = {}
-
-
 class AuthService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -309,7 +305,7 @@ class AuthService:
 
     async def request_password_reset_otp(
         self, identifier: str
-    ) -> tuple[str, str, str]:
+    ) -> tuple[str, str]:
         clean_id = identifier.strip().lower()
         user = await self.user_repo.get_by_email(clean_id)
         if not user:
@@ -340,18 +336,11 @@ class AuthService:
         await self.token_repo.create(new_record)
         await self.session.commit()
 
-        # Record in LATEST_OTPS for diagnostics & cloud free-tier fallback
-        LATEST_OTPS[clean_id] = otp_code
-
         logger.info(
-            f"\n================ [PASSWORD RESET OTP] ================\n"
-            f"To: {user.email}\n"
-            f"OTP Code: {otp_code}\n"
-            f"Expires in: 10 minutes\n"
-            f"======================================================="
+            f"Password reset OTP generated and dispatched via email to {user.email}."
         )
 
-        # Dispatch email asynchronously in background so client gets instant <100ms response
+        # Dispatch email asynchronously in background
         async def _dispatch_otp_background() -> None:
             try:
                 await self.email_service.send_password_reset_otp_email(
@@ -366,8 +355,7 @@ class AuthService:
 
         return (
             user.email,
-            "A 6-digit verification code has been generated and sent.",
-            otp_code,
+            "A 6-digit verification code has been sent to your email address.",
         )
 
     async def reset_password_with_otp(

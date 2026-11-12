@@ -142,7 +142,6 @@ class OtpResponse(BaseModel):
     message: str
     email: str
     success: bool = True
-    dev_otp: str | None = None
 
 
 class ResetPasswordRequest(BaseModel):

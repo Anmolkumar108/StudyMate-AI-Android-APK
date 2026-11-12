@@ -97,7 +97,6 @@ export interface OtpResponse {
   message: string;
   email: string;
   success: boolean;
-  dev_otp?: string | null;
 }
 
 export interface ResetPasswordRequest {
