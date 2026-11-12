@@ -25,4 +25,19 @@ async def health_check() -> dict[str, Any]:
         "environment": settings.ENVIRONMENT,
         "version": "0.1.0",
         "database": db_status,
+        "smtp_configured": bool(settings.SMTP_HOST and settings.SMTP_PASSWORD),
+        "smtp_host": settings.SMTP_HOST,
+        "smtp_port": settings.SMTP_PORT,
+    }
+
+
+@router.get("/health/smtp", response_model=dict[str, Any])
+async def smtp_health() -> dict[str, Any]:
+    return {
+        "smtp_host": settings.SMTP_HOST,
+        "smtp_port": settings.SMTP_PORT,
+        "smtp_user": settings.SMTP_USER,
+        "smtp_configured": bool(settings.SMTP_HOST and settings.SMTP_PASSWORD),
+        "from_email": settings.EMAILS_FROM_EMAIL,
+        "from_name": settings.EMAILS_FROM_NAME,
     }

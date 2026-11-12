@@ -40,12 +40,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str | None = None
 
     # Email & SMTP Settings
-    SMTP_HOST: str | None = None
+    SMTP_HOST: str | None = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USER: str | None = None
-    SMTP_PASSWORD: str | None = None
+    SMTP_USER: str | None = "akanmolbhumihar09@gmail.com"
+    SMTP_PASSWORD: str | None = "tzuqxcweqsvnabxh"
     SMTP_TLS: bool = True
-    EMAILS_FROM_EMAIL: str = "noreply@studymate.ai"
+    EMAILS_FROM_EMAIL: str = "akanmolbhumihar09@gmail.com"
     EMAILS_FROM_NAME: str = "StudyMate AI"
 
     # Deep Linking & Token Expiry

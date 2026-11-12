@@ -72,6 +72,10 @@ class ResendRateLimitError(AuthError):
     """Raised when a user requests verification emails too quickly."""
 
 
+class UserNotFoundError(AuthError):
+    """Raised when a requested user account does not exist."""
+
+
 class AuthService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -294,12 +298,12 @@ class AuthService:
     ) -> tuple[str, str]:
         clean_id = identifier.strip().lower()
         user = await self.user_repo.get_by_email(clean_id)
-        if not user or user.status == UserStatus.SUSPENDED:
-            # Anti-enumeration: Return generic message without error
-            return (
-                clean_id,
-                "If this account exists, a 6-digit verification code has been sent to your email.",
+        if not user:
+            raise UserNotFoundError(
+                f"No account found with email '{clean_id}'. Please check your email or register a new account."
             )
+        if user.status == UserStatus.SUSPENDED:
+            raise AccountSuspendedError("This account is suspended. Please contact support.")
 
         # Invalidate old OTPs for this user
         await self.token_repo.invalidate_user_tokens(
@@ -337,7 +341,8 @@ class AuthService:
                 otp_code=otp_code,
             )
         except Exception as err:
-            logger.warning(f"Could not dispatch OTP email via SMTP: {err}")
+            logger.error(f"Could not dispatch OTP email via SMTP to {user.email}: {err}")
+            raise RuntimeError(f"Unable to dispatch email: {err}") from err
 
         return (
             user.email,

@@ -55,6 +55,7 @@ class EmailService:
         msg.attach(part1)
         msg.attach(part2)
 
+        # Primary Attempt: Standard TLS (Port 587 or configured port)
         try:
             with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=15) as server:
                 server.ehlo()
@@ -64,10 +65,24 @@ class EmailService:
                 if self.smtp_user and self.smtp_password:
                     server.login(self.smtp_user, self.smtp_password)
                 server.sendmail(self.from_email, [to_email], msg.as_string())
-                logger.info(f"Email successfully delivered to {to_email} via SMTP.")
-        except Exception as e:
-            logger.error(f"Failed to send email to {to_email} via SMTP: {e}")
-            raise
+                logger.info(f"Email successfully delivered to {to_email} via SMTP (port {self.smtp_port}).")
+                return
+        except Exception as e587:
+            logger.warning(
+                f"SMTP attempt on port {self.smtp_port} failed: {e587}. Retrying with direct SSL port 465 fallback..."
+            )
+
+        # Secondary Attempt: Direct SSL (Port 465) fallback for cloud container environments
+        try:
+            with smtplib.SMTP_SSL(self.smtp_host, 465, timeout=15) as server:
+                if self.smtp_user and self.smtp_password:
+                    server.login(self.smtp_user, self.smtp_password)
+                server.sendmail(self.from_email, [to_email], msg.as_string())
+                logger.info(f"Email successfully delivered to {to_email} via direct SMTP_SSL (port 465).")
+                return
+        except Exception as e465:
+            logger.error(f"Both SMTP port {self.smtp_port} and SSL port 465 failed for {to_email}: {e465}")
+            raise RuntimeError(f"Failed to deliver email to {to_email}: {e465}") from e465
 
     async def send_verification_email(
         self, to_email: str, full_name: str, verification_url: str, raw_token: str

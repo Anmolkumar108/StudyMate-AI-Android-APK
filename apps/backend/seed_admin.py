@@ -60,6 +60,28 @@ async def seed_production_database(email: str, password: str, full_name: str) ->
             await session.commit()
             print(f"==> [Seed] Super Admin '{email}' successfully provisioned with SUPER_ADMIN privileges!")
 
+        # 1.1 Ensure active Student test account exists for mobile OTP & password recovery
+        dev_email = "devlopersingh6@gmail.com"
+        stmt_dev = select(User).where(User.email == dev_email)
+        res_dev = await session.execute(stmt_dev)
+        dev_user = res_dev.scalar_one_or_none()
+        if not dev_user:
+            print(f"==> [Seed] Seeding student account '{dev_email}'...")
+            new_student = User(
+                id=uuid.uuid4(),
+                email=dev_email,
+                hashed_password=hash_password("Dev@Singh2026"),
+                full_name="Developer Singh",
+                role=UserRole.STUDENT,
+                status=UserStatus.ACTIVE,
+                token_version=1,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(new_student)
+            await session.commit()
+            print(f"==> [Seed] Student account '{dev_email}' successfully seeded!")
+
         # 2. Seed baseline App Configurations if empty
         stmt_configs = select(AppConfig)
         res_configs = await session.execute(stmt_configs)

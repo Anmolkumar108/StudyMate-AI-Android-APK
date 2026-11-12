@@ -37,6 +37,7 @@ from app.services.auth_service import (
     InvalidVerificationTokenError,
     ResendRateLimitError,
     SessionNotFoundError,
+    UserNotFoundError,
 )
 from app.services.google_auth_service import (
     GoogleEmailNotVerifiedError,
@@ -335,12 +336,28 @@ async def forgot_password_otp(
     payload: ForgotPasswordOtpRequest,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> OtpResponse:
-    email, message = await auth_service.request_password_reset_otp(payload.email)
-    return OtpResponse(
-        email=email,
-        message=message,
-        success=True,
-    )
+    try:
+        email, message = await auth_service.request_password_reset_otp(payload.email)
+        return OtpResponse(
+            email=email,
+            message=message,
+            success=True,
+        )
+    except UserNotFoundError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(err),
+        ) from err
+    except AccountSuspendedError as err:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(err),
+        ) from err
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to send verification code: {err}",
+        ) from err
 
 
 @router.post(
