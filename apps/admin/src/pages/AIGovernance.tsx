@@ -34,8 +34,25 @@ export const AIGovernance: React.FC = () => {
     loadMetrics();
   }, []);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleQuickActivate = async (model: string) => {
+    setSelectedModel(model);
+    setSaving(true);
+    try {
+      const updated = await adminApi.updateAIConfig(model, budgetLimit);
+      setMetrics(updated);
+      showToast(
+        `AI Gateway updated to ${updated.active_model_name} with $${updated.daily_budget_limit_usd}/day cap.`,
+        'success'
+      );
+    } catch (e: unknown) {
+      if (e instanceof Error) showToast(e.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedModel) return;
 
     setSaving(true);
@@ -108,11 +125,22 @@ export const AIGovernance: React.FC = () => {
       )}
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">AI Model Governance & Costs</h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Dynamically switch backend LLM providers, enforce token budgets, and control model burn rates
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">AI Model Governance & Costs</h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Dynamically switch backend LLM providers, enforce token budgets, and control model burn rates
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => handleSave()}
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50 self-start sm:self-auto"
+        >
+          <Save className="w-4 h-4" />
+          <span>{saving ? 'Applying...' : 'Save AI Configuration'}</span>
+        </button>
       </div>
 
       {/* Metrics Banner */}
@@ -162,6 +190,7 @@ export const AIGovernance: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {metrics?.available_models.map((model) => {
               const isSelected = selectedModel === model;
+              const isLive = metrics?.active_model_name === model;
               const meta = modelDescriptions[model] || {
                 desc: 'Configurable LLM provider model.',
                 badge: 'General LLM',
@@ -170,25 +199,55 @@ export const AIGovernance: React.FC = () => {
                 <div
                   key={model}
                   onClick={() => setSelectedModel(model)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                    isSelected
+                  className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                    isLive
+                      ? 'bg-emerald-950/20 border-emerald-500/50 shadow-md shadow-emerald-500/10'
+                      : isSelected
                       ? 'bg-indigo-600/10 border-indigo-500 shadow-md shadow-indigo-600/10'
                       : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-sm font-bold text-white">{model}</span>
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                        isSelected
-                          ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-                          : 'bg-slate-800 text-slate-400 border-slate-700'
-                      }`}
-                    >
-                      {meta.badge}
-                    </span>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-mono text-sm font-bold text-white">{model}</span>
+                      <div className="flex items-center gap-1.5">
+                        {isLive && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            ✓ Live Now
+                          </span>
+                        )}
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                            isSelected
+                              ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}
+                        >
+                          {meta.badge}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed mb-3">{meta.desc}</p>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">{meta.desc}</p>
+
+                  <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500">
+                      {isLive ? 'Currently handling student queries' : isSelected ? 'Selected (Click Save below)' : 'Click card to select'}
+                    </span>
+                    {!isLive && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickActivate(model);
+                        }}
+                        disabled={saving}
+                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-semibold transition-all"
+                      >
+                        Activate Now
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

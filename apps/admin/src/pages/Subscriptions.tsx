@@ -39,6 +39,7 @@ export const Subscriptions: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [monetizationActive, setMonetizationActive] = useState<boolean>(false);
 
   // Edit tier modal
   const [editingTier, setEditingTier] = useState<SubscriptionTier | null>(null);
@@ -55,10 +56,34 @@ export const Subscriptions: React.FC = () => {
       if (subConfig && Array.isArray(subConfig.value)) {
         setTiers(subConfig.value);
       }
+      const gateConfig = res.items.find((c) => c.key === 'monetization_gate_active');
+      if (gateConfig) {
+        setMonetizationActive(Boolean(gateConfig.value));
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load subscription configurations');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleMonetizationGate = async () => {
+    try {
+      setIsSaving(true);
+      setError(null);
+      const nextState = !monetizationActive;
+      await apiClient.updateAppConfig(
+        'monetization_gate_active',
+        nextState,
+        'Master switch for student payment gate (false = 100% free mode)'
+      );
+      setMonetizationActive(nextState);
+      setSuccess(`Monetization Gate is now ${nextState ? 'ACTIVE' : 'DISABLED (100% Free Mode for Students)'}`);
+      setTimeout(() => setSuccess(null), 3500);
+    } catch (err: any) {
+      setError(err.message || 'Failed to toggle monetization gate');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -161,13 +186,32 @@ export const Subscriptions: React.FC = () => {
             <div className="text-2xl font-bold text-white mt-1">{tiers.length} Tiers</div>
             <div className="text-[11px] text-slate-500 mt-1">Configured in production database</div>
           </div>
-          <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4">
+          <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
               <span>Student Monetization Gate</span>
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <ShieldCheck className={`w-4 h-4 ${monetizationActive ? 'text-emerald-400' : 'text-slate-500'}`} />
             </div>
-            <div className="text-2xl font-bold text-emerald-400 mt-1">Active</div>
-            <div className="text-[11px] text-slate-500 mt-1">Free Tier + StudyMate Pro</div>
+            <div className="flex items-center justify-between mt-2">
+              <div>
+                <div className={`text-xl font-bold ${monetizationActive ? 'text-emerald-400' : 'text-slate-300'}`}>
+                  {monetizationActive ? 'Active (Paywall)' : '100% Free Mode'}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {monetizationActive ? 'Pro Paywall Enabled' : 'All Students Have Full Free Access'}
+                </div>
+              </div>
+              <button
+                onClick={toggleMonetizationGate}
+                disabled={isSaving}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  monetizationActive
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
+                }`}
+              >
+                {monetizationActive ? 'Disable Paywall' : 'Enable Paywall'}
+              </button>
+            </div>
           </div>
           <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4">
             <div className="flex items-center justify-between text-xs text-slate-400 font-medium">

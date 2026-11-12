@@ -82,44 +82,168 @@ async def seed_production_database(email: str, password: str, full_name: str) ->
             await session.commit()
             print(f"==> [Seed] Student account '{dev_email}' successfully seeded!")
 
-        # 2. Seed baseline App Configurations if empty
+        # 2. Seed baseline App Configurations & Feature Flags
         stmt_configs = select(AppConfig)
         res_configs = await session.execute(stmt_configs)
-        configs = res_configs.scalars().all()
+        existing_keys = {c.key for c in res_configs.scalars().all()}
 
-        if not configs:
-            print("==> [Seed] Seeding baseline runtime application feature flags...")
-            default_configs = [
-                AppConfig(
+        baseline_configs = [
+            AppConfig(
+                id=uuid.uuid4(),
+                key="subscription_tiers",
+                value=[
+                    {
+                        "tier_id": "free",
+                        "name": "Student Standard",
+                        "price_inr": 0,
+                        "features": ["100 Notes", "5 Subjects", "50 Daily AI Queries", "Basic Pomodoro"],
+                    },
+                    {
+                        "tier_id": "pro",
+                        "name": "StudyMate Pro",
+                        "price_inr": 199,
+                        "features": [
+                            "Unlimited Notes",
+                            "Unlimited Subjects",
+                            "500 Daily AI Queries",
+                            "Exam Predictor",
+                            "Priority AI Model",
+                        ],
+                    },
+                ],
+                category="monetization",
+                description="Platform subscription plans, pricing in INR, and quotas",
+                updated_at=now,
+            ),
+            AppConfig(
+                id=uuid.uuid4(),
+                key="monetization_gate_active",
+                value=False,
+                category="monetization",
+                description="Master switch for student payment gate (False = 100% free mode)",
+                updated_at=now,
+            ),
+            AppConfig(
+                id=uuid.uuid4(),
+                key="min_app_version",
+                value={
+                    "version": "1.0.0",
+                    "force_update": False,
+                    "store_url": "https://play.google.com/store/apps/details?id=com.studymate.ai",
+                },
+                category="remote_config",
+                description="Minimum supported Android version and Play Store gate",
+                updated_at=now,
+            ),
+            AppConfig(
+                id=uuid.uuid4(),
+                key="feature_flags",
+                value={
+                    "ai_chat_enabled": True,
+                    "pomodoro_timer_enabled": True,
+                    "curated_curriculum_enabled": True,
+                    "quiz_generator_enabled": True,
+                    "gdpr_export_enabled": True,
+                },
+                category="features",
+                description="Dynamic student feature killswitch toggles",
+                updated_at=now,
+            ),
+            AppConfig(
+                id=uuid.uuid4(),
+                key="ai_limits_config",
+                value={
+                    "daily_free_tier_queries": 50,
+                    "daily_pro_tier_queries": 500,
+                    "max_tokens_per_request": 4096,
+                    "temperature": 0.7,
+                },
+                category="ai_governance",
+                description="AI query quotas, token limits, and LLM hyperparameters",
+                updated_at=now,
+            ),
+            AppConfig(
+                id=uuid.uuid4(),
+                key="ai_model_name",
+                value="gemini-3.1-flash-lite",
+                category="ai_governance",
+                description="Active primary AI model architecture",
+                updated_at=now,
+            ),
+            AppConfig(
+                id=uuid.uuid4(),
+                key="ai_daily_budget_limit_usd",
+                value=10.0,
+                category="ai_governance",
+                description="Global daily AI budget spend ceiling in USD",
+                updated_at=now,
+            ),
+            AppConfig(
+                id=uuid.uuid4(),
+                key="feature_pomodoro_ambient_sound",
+                value=True,
+                category="features",
+                description="Enable high-fidelity binaural ambient background sound in Pomodoro timer",
+                updated_at=now,
+            ),
+            AppConfig(
+                id=uuid.uuid4(),
+                key="maintenance_mode",
+                value=False,
+                category="system",
+                description="Global platform maintenance mode switch",
+                updated_at=now,
+            ),
+        ]
+
+        to_add = [c for c in baseline_configs if c.key not in existing_keys]
+        if to_add:
+            session.add_all(to_add)
+            await session.commit()
+            print(f"==> [Seed] Seeded {len(to_add)} missing application configurations.")
+        else:
+            print(f"==> [Seed] All application configurations already present.")
+
+        # 3. Seed sample Support Tickets if empty
+        from app.models.support_ticket import SupportTicket, TicketCategory, TicketPriority, TicketStatus
+        stmt_tickets = select(SupportTicket)
+        res_tickets = await session.execute(stmt_tickets)
+        existing_tickets = res_tickets.scalars().all()
+
+        if not existing_tickets and dev_user:
+            print("==> [Seed] Seeding sample support tickets...")
+            welcome_tickets = [
+                SupportTicket(
                     id=uuid.uuid4(),
-                    key="feature_pomodoro_ambient_sound",
-                    value=True,
-                    category="features",
-                    description="Enable high-fidelity binaural ambient background sound in Pomodoro timer",
+                    ticket_number="SM-TICK-1001",
+                    user_id=dev_user.id,
+                    subject="Welcome to StudyMate AI Support Desk",
+                    category=TicketCategory.ACCOUNT_ISSUE,
+                    priority=TicketPriority.LOW,
+                    status=TicketStatus.RESOLVED,
+                    description="Automated system onboarding ticket. Support desk SLA monitoring is active.",
+                    admin_notes="Account successfully created and validated by automated system.",
+                    resolution_summary="Ticket resolved on student account setup.",
+                    created_at=now,
                     updated_at=now,
+                    resolved_at=now,
                 ),
-                AppConfig(
+                SupportTicket(
                     id=uuid.uuid4(),
-                    key="ai_daily_budget_limit_usd",
-                    value=10.0,
-                    category="ai_governance",
-                    description="Global daily AI budget spend ceiling in USD",
-                    updated_at=now,
-                ),
-                AppConfig(
-                    id=uuid.uuid4(),
-                    key="maintenance_mode",
-                    value=False,
-                    category="system",
-                    description="Global platform maintenance mode switch",
+                    ticket_number="SM-TICK-1002",
+                    user_id=dev_user.id,
+                    subject="Offline study mode and flashcard caching request",
+                    category=TicketCategory.FEATURE_REQUEST,
+                    priority=TicketPriority.MEDIUM,
+                    status=TicketStatus.OPEN,
+                    description="Requesting ability to review flashcards and Cornell notes during campus commute without active internet.",
+                    created_at=now,
                     updated_at=now,
                 ),
             ]
-            session.add_all(default_configs)
+            session.add_all(welcome_tickets)
             await session.commit()
-            print(f"==> [Seed] Seeded {len(default_configs)} baseline application configurations.")
-        else:
-            print(f"==> [Seed] Existing {len(configs)} app configurations detected. Skipping config seed.")
+            print(f"==> [Seed] Seeded {len(welcome_tickets)} baseline support tickets.")
 
 
 def main() -> None:

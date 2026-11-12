@@ -315,15 +315,41 @@ class AdminService:
     ) -> AdminAIMetrics:
         old_model = settings.AI_MODEL_NAME
         settings.AI_MODEL_NAME = model_name
+        if "gpt" in model_name.lower():
+            settings.PRIMARY_AI_PROVIDER = "openai"
+        elif "claude" in model_name.lower():
+            settings.PRIMARY_AI_PROVIDER = "anthropic"
+        else:
+            settings.PRIMARY_AI_PROVIDER = "gemini"
+
         if daily_budget_limit_usd is not None:
             settings.AI_DAILY_BUDGET_LIMIT_USD = daily_budget_limit_usd
+
+        try:
+            await self.update_app_config(
+                key="ai_model_name",
+                value=model_name,
+                actor_id=actor_id,
+                description="Active LLM model architecture",
+                ip_address=ip_address,
+            )
+            if daily_budget_limit_usd is not None:
+                await self.update_app_config(
+                    key="ai_daily_budget_limit_usd",
+                    value=daily_budget_limit_usd,
+                    actor_id=actor_id,
+                    description="Global daily AI budget spend ceiling in USD",
+                    ip_address=ip_address,
+                )
+        except Exception as e:
+            logger.warning(f"Could not persist AI config to app_configurations: {e}")
 
         await self.audit_log_repo.log(
             actor_id=actor_id,
             action="ai_model_updated",
             target_type="ai_config",
             target_id=model_name,
-            details=f"AI Model switched from '{old_model}' to '{model_name}'. Budget limit: ${settings.AI_DAILY_BUDGET_LIMIT_USD}/day",
+            details=f"AI Model switched from '{old_model}' to '{model_name}' (Provider: {settings.PRIMARY_AI_PROVIDER}). Budget limit: ${settings.AI_DAILY_BUDGET_LIMIT_USD}/day",
             ip_address=ip_address,
         )
         return self.get_ai_metrics()
