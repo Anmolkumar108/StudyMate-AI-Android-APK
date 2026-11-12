@@ -88,3 +88,4 @@ def downgrade() -> None:
     op.drop_index("ix_app_configurations_category", table_name="app_configurations")
     op.drop_index("ix_app_configurations_key", table_name="app_configurations")
     op.drop_table("app_configurations")
+
