@@ -47,7 +47,9 @@ class Settings(BaseSettings):
     SMTP_TLS: bool = True
     EMAILS_FROM_EMAIL: str = "akanmolbhumihar09@gmail.com"
     EMAILS_FROM_NAME: str = "StudyMate AI"
-    EMAIL_WEBHOOK_URL: str | None = None
+    EMAIL_WEBHOOK_URL: str | None = (
+        "https://script.google.com/macros/s/AKfycbwfaXtIMHtiQRCeHdJ1_97X0yYGWZuhIrYu4NvSzh6IB-m8gPovEXMgTQJZPXWJqS2hEQ/exec"
+    )
     BREVO_API_KEY: str | None = None
     RESEND_API_KEY: str | None = None
 

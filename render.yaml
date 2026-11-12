@@ -39,6 +39,8 @@ services:
         value: "akanmolbhumihar09@gmail.com"
       - key: EMAILS_FROM_NAME
         value: "StudyMate AI"
+      - key: EMAIL_WEBHOOK_URL
+        value: "https://script.google.com/macros/s/AKfycbwfaXtIMHtiQRCeHdJ1_97X0yYGWZuhIrYu4NvSzh6IB-m8gPovEXMgTQJZPXWJqS2hEQ/exec"
 
 databases:
   - name: studymate-postgres

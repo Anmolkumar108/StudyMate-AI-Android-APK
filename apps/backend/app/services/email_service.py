@@ -43,7 +43,7 @@ class EmailService:
         # 1. Google Apps Script Webhook Relay (sends from user's personal Gmail, 100% free)
         if settings.EMAIL_WEBHOOK_URL:
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
+                async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
                     resp = await client.post(
                         settings.EMAIL_WEBHOOK_URL,
                         json={
